@@ -1,0 +1,5 @@
+# Toolchain pinned for this project. Run `rokit install` after cloning.
+[tools]
+rojo = "rojo-rbx/rojo@7.7.1"
+selene = "kampfkarren/selene@0.32.0"
+stylua = "johnnymorganz/stylua@2.6.0"

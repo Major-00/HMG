@@ -1,0 +1,26 @@
+# Roblox / Rojo build outputs
+*.rbxl
+*.rbxlx
+*.rbxm.lock
+*.rbxl.lock
+*.rbxlx.lock
+sourcemap.json
+/build/
+/out/
+
+# Wally (if added later)
+/Packages/
+/ServerPackages/
+/DevPackages/
+
+# Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# OS junk
+.DS_Store
+._*
+Thumbs.db
+desktop.ini

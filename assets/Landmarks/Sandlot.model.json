@@ -1,0 +1,20 @@
+{
+  "className": "Model",
+  "attributes": { "Placeholder": true },
+  "children": [
+    {
+      "name": "Placeholder",
+      "className": "Part",
+      "properties": {
+        "Anchored": true,
+        "CanCollide": false,
+        "CanQuery": false,
+        "CanTouch": false,
+        "CastShadow": false,
+        "Material": "SmoothPlastic",
+        "Size": [12, 24, 12],
+        "Color": [0.80, 0.66, 0.45]
+      }
+    }
+  ]
+}

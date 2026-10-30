@@ -2,7 +2,7 @@
 -- Biomes: World 1 biomes in flight order. WorldController builds each strip from this.
 -- landmark = model name under ReplicatedStorage.Landmarks (assets/Landmarks/).
 -- challenge = per-biome challenge slot, empty in the MVP.
--- startDistance, length and colors are added in the economy/world step.
+-- Where each biome starts is in Config/Tuning (BiomeStarts); colors come with biome visuals.
 
 local HookTypes = require(script.Parent.Parent.HookTypes)
 

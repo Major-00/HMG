@@ -9,6 +9,7 @@ export type Pitch = {
 	pitcherId: string, -- which pitcher threw it ("pitching_machine" for now)
 	releaseAt: number, -- workspace:GetServerTimeNow() when the ball leaves the pitcher
 	arriveAt: number, -- when it reaches the plate
+	expiresAt: number, -- last moment a tap still hits; after this it's a miss
 }
 
 -- PITCHER SLOT. Each player has exactly one active pitcher.
@@ -37,10 +38,13 @@ export type LandingContext = {
 	segments: { FlightSegment }, -- read-only to handlers; LandingService appends
 	landedAt: number, -- current landing distance (end of the last segment)
 	biomeIndex: number, -- biome under landedAt
+	biomeName: string, -- display name of that biome
+	position: Vector3, -- world position where the ball lands, in the player's lane
 }
 
 -- ON-LAND HOOK. Runs on the server, in registration order, before Wins are paid.
 -- Return a FlightSegment to push the ball further (e.g. a catcher pet), or nil to do nothing.
+-- Handlers must not yield. LandingService.Landed fires after all handlers with the final context.
 export type LandingHandler = (ctx: LandingContext) -> FlightSegment?
 
 -- HIGHLIGHT EVENT. Fired after a hit is final.

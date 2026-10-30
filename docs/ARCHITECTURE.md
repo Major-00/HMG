@@ -44,7 +44,7 @@ number along one straight track, so the server never needs the biome geometry.
 
 | Piece | Built by | Why |
 |---|---|---|
-| Batting area, plate, pitcher spot | Server (`WorldService`) | Characters stand on it, so it must be physical and replicated. |
+| Batting lanes (pad, plate, batter spawn, pitching machine) | Server (`WorldService`) | Characters stand on them, so they must be physical and replicated. One lane per player (`Tuning.World.LANE_COUNT`, default 8), side by side along X; balls fly down +Z. Lane models are Persistent for streaming. |
 | Biome strips (ground, color, simple props) | Client (`WorldController`) from `Config/Biomes` | Nothing to replicate. Cheap on phones, and only nearby strips need to be built. |
 | Landmarks | Client clones from `ReplicatedStorage.Landmarks` | Hand-made models, placed by config. |
 
@@ -101,7 +101,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Formulas | Pure math: multipliers, distance from Power, Wins from distance, rebirth cost. |
 | Format | Number display (1.2K, 3.4M). |
 | Signal | Small server/client event utility used by the hooks. |
-| Config/Bats, Eggs, Pets, Biomes, Rebirth, Tuning | Data tables. All balance numbers live here. |
+| Config/Tuning | **Every tunable number** (pitch timing, Power, distance, Wins, biome start distances, lane layout, flight visuals). |
+| Config/Bats, Eggs, Pets, Biomes, Rebirth | Catalog tables (ids, names, per-item stats). |
 
 ## 4. The hit flow
 

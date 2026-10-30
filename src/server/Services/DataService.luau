@@ -51,7 +51,7 @@ end
 
 local function loadPlayer(player: Player)
 	-- Passing Cancel turns off ProfileStore's own load timeout, so the deadline lives here.
-	local deadline = os.clock() + Tuning.DATA_LOAD_KICK_SECONDS
+	local deadline = os.clock() + Tuning.Data.LOAD_KICK_SECONDS
 	local profile = store:StartSessionAsync(profileKey(player), {
 		Cancel = function()
 			return not isInGame(player) or os.clock() > deadline
@@ -125,7 +125,7 @@ end
 
 -- Yields until the save is loaded. Returns nil if the player leaves or `timeout` passes.
 function DataService.WaitForData(player: Player, timeout: number?): Types.PlayerData?
-	local deadline = os.clock() + (timeout or Tuning.DATA_LOAD_TIMEOUT)
+	local deadline = os.clock() + (timeout or Tuning.Data.LOAD_TIMEOUT)
 	while profiles[player] == nil do
 		if not isInGame(player) or os.clock() > deadline then
 			return nil
@@ -153,7 +153,7 @@ function DataService.Update(player: Player, key: string, fn: (any) -> any): bool
 end
 
 function DataService.Init()
-	ProfileStore.SetConstant("AUTO_SAVE_PERIOD", Tuning.AUTOSAVE_SECONDS)
+	ProfileStore.SetConstant("AUTO_SAVE_PERIOD", Tuning.Data.AUTOSAVE_SECONDS)
 	store = ProfileStore.New(STORE_NAME, Template)
 end
 

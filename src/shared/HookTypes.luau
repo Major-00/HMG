@@ -40,12 +40,39 @@ export type LandingContext = {
 	biomeIndex: number, -- biome under landedAt
 	biomeName: string, -- display name of that biome
 	position: Vector3, -- world position where the ball lands, in the player's lane
+	catch: Catch?, -- the Mascot caught, on the final context only (nil if the catch failed)
 }
 
 -- ON-LAND HOOK. Runs on the server, in registration order, before the Mascot catch (which uses
 -- the final distance). Return a FlightSegment to push the ball further (e.g. a bounce), or nil.
 -- Handlers must not yield. LandingService.Landed fires after all handlers with the final context.
 export type LandingHandler = (ctx: LandingContext) -> FlightSegment?
+
+-- A Mascot sold to make room, at its full sell value.
+export type SoldMascot = {
+	species: string,
+	variant: string,
+	size: string,
+	cash: number,
+}
+
+-- The Mascot caught on a landing. Decided by the server and sent to the client in HitResult.
+export type Catch = {
+	uid: string, -- the new Mascot's id in the save (still set when it was the one sold)
+	species: string,
+	rarity: string,
+	variant: string,
+	size: string,
+	cashPerSec: number, -- before park upgrades and the stadium tier
+	placedIn: "seat" | "hotbar" | "sold", -- "sold": the roster was full and this catch was the weaker
+	slot: number?, -- seat or hotbar index
+	isNewSpecies: boolean, -- first time this species was caught (its Index card just unlocked)
+	sold: SoldMascot?, -- whatever was sold to make room (the catch itself when placedIn = "sold")
+}
+
+-- CATCH PHASE of the on-land hook. Runs once, after every LandingHandler, on the final landing.
+-- Rolls and places the Mascot (MascotService). Must not yield.
+export type Catcher = (ctx: LandingContext) -> Catch?
 
 -- HIGHLIGHT EVENT. Fired after a hit is final.
 export type HighlightKind = "record" | "biome"

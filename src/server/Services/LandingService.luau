@@ -1,9 +1,11 @@
 --!strict
 -- LandingService: the on-land hook. After a hit, works out where the ball lands, lets each
--- registered handler push it further (e.g. a bounce), then fires Landed with the result.
--- No handlers are registered yet.
+-- registered handler push it further (e.g. a bounce), runs the catch phase on the final landing
+-- (the Mascot caught there), then fires Landed with the result.
+-- No push handlers are registered yet; MascotService sets the catcher.
 --   LandingService.AddHandler(fn)  -> register a HookTypes.LandingHandler (must not yield)
---   LandingService.Landed          -> Signal (ctx: HookTypes.LandingContext), after all handlers
+--   LandingService.SetCatcher(fn)  -> set the HookTypes.Catcher (must not yield)
+--   LandingService.Landed          -> Signal (ctx: HookTypes.LandingContext), after the catch
 --   LandingService.Resolve(...)    -> used by SwingService; returns the final context
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,6 +22,7 @@ local LandingService = {}
 LandingService.Landed = Signal.new()
 
 local handlers: { HookTypes.LandingHandler } = {}
+local catcher: HookTypes.Catcher? = nil
 
 local function context(
 	player: Player,
@@ -40,6 +43,10 @@ end
 
 function LandingService.AddHandler(handler: HookTypes.LandingHandler)
 	table.insert(handlers, handler)
+end
+
+function LandingService.SetCatcher(fn: HookTypes.Catcher)
+	catcher = fn
 end
 
 -- Runs the hit through every handler and returns the final landing.
@@ -65,6 +72,15 @@ function LandingService.Resolve(
 		end
 	end
 	local final = context(player, hitId, segments)
+	if catcher then
+		-- A failed catch never stops the hit: the swing still counts, there's just no Mascot.
+		local ok, caught = pcall(catcher, final)
+		if ok then
+			final.catch = caught
+		else
+			warn(`[LandingService] Catch failed: {caught}`)
+		end
+	end
 	LandingService.Landed:Fire(final)
 	return final
 end

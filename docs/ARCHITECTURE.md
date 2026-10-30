@@ -159,8 +159,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/StatService | Power multiplier per hit (bat × stadium-tier Power multiplier × pitcher bonus × boosts). |
 | Services/PitchService | **Pitcher slot.** Holds each player's active Pitcher, schedules pitches, keeps the one pending pitch, and brings the next pitch forward on `Ready` (never inside the minimum gap). |
 | Services/SwingService | Handles `Swing`: matches it to the pending pitch, adds Power, makes the hit's first flight segment, queues the next pitch after the ball-cam and reveal. |
-| Services/LandingService | **On-land hook.** Runs the push handlers, then the catch phase, then finalizes distance and biome. |
-| Services/MascotService *(planned)* | Registers the catch phase: rolls species, variant and size on the server, updates the Index, places the catch. Handles Sell, Lock, Move, Equip Best and Auto-Sell. |
+| Services/LandingService | **On-land hook.** Runs the push handlers, then the catch phase (`SetCatcher`), then fires `Landed` with the final distance, biome and catch. |
+| Services/MascotService | Sets the catch phase: rolls species, variant and size on the server, updates the Index and lifetime count, places the catch (seat, hotbar, or a temporary sell-the-weaker rule until the inventory step). (Planned: Sell, Lock, Move, Equip Best and Auto-Sell remotes.) |
 | Services/MascotInventory *(planned)* | Pure rules for seats, hotbar, On Deck, Auto-Sell, Lock and Equip Best, plus an invariant check (every Mascot in exactly one slot; locked Mascots never sold). |
 | Services/ParkService *(planned)* | Park upgrades, and the once-a-second Cash/s payout. |
 | Services/OfflineService *(planned)* | Pays capped offline earnings at load and sends `WelcomeBack`. |
@@ -316,7 +316,7 @@ rows don't exist yet.
 | C → S | `EquipBest` / `SetAutoSell` *(planned)* | Function | (`on`) → `{ ok, err? }` |
 | C → S | `Promote` *(planned)* | Function | → `{ ok, err? }` |
 | S → C | `Pitch` | Event | `Pitch` (see HookTypes) |
-| S → C | `HitResult` | Event | `{ hitId, powerGained, pitcherBonus, segments, distance, biomeIndex, catch? }`. `catch` *(planned)* = `{ uid, species, rarity, variant, size, cashPerSec, placedIn, isNewSpecies, sold? }` |
+| S → C | `HitResult` | Event | `{ hitId, powerGained, pitcherBonus, segments, distance, biomeIndex, catch? }`. `catch` = `HookTypes.Catch`: `{ uid, species, rarity, variant, size, cashPerSec, placedIn, slot?, isNewSpecies, sold? }` |
 | S → C | `Highlight` | Event | `Highlight` minus `player` |
 | S → C | `WelcomeBack` *(planned)* | Event | `{ seconds, cash }` |
 | S → C | `DataChanged` | Event | changed top-level keys only |

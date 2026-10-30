@@ -24,7 +24,7 @@ Remotes.Functions = {
 -- Server -> Client (RemoteEvent)
 Remotes.ServerEvents = {
 	"Pitch", -- HookTypes.Pitch
-	"HitResult", -- { hitId, powerGained, pitcherBonus, segments: {FlightSegment}, distance, biomeIndex }
+	"HitResult", -- { hitId, powerGained, pitcherBonus, segments: {FlightSegment}, distance, biomeIndex, catch: HookTypes.Catch? }
 	"Highlight", -- HookTypes.Highlight without the player field
 	"DataChanged", -- { [topLevelKey]: newValue } for keys changed since the last frame
 }

@@ -77,6 +77,7 @@ local function onSwing(player: Player, pitchId: unknown)
 		segments = landing.segments,
 		distance = distance,
 		biomeIndex = landing.biomeIndex,
+		catch = landing.catch, -- the Mascot caught (HookTypes.Catch), nil if the catch failed
 	})
 	HighlightService.Evaluate(player, pitch.pitchId, distance, previousHighest, previousBest)
 end

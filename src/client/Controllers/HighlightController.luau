@@ -6,6 +6,9 @@
 --   * Highlight "record" (the best distance passed a milestone): "PERFECT!" as the ball passes it.
 --     Celebrations are given on milestones, never for tap skill (CLAUDE.md guardrail 5).
 --   * Every landing: the distance pops up at the landing spot, then `Landed` fires.
+--   * The Mascot caught (HitResult.catch): a toast when the ball lands, or as soon as the result
+--     arrives if the ball landed first. Shows anything sold to make room ("Sold Frog +$120").
+--     The catch reveal replaces this in a later step.
 --   HighlightController.Landed -> Signal ({ hitId, segmentIndex, position, distance, biomeName, isFinal })
 --     The client side of the on-land hook, at the moment the ball visibly lands. The server's
 --     on-land hook (LandingService) already ran at hit time, because the catch depends on it.
@@ -19,6 +22,7 @@ local Config = Shared:WaitForChild("Config")
 local Biomes = require(Config:WaitForChild("Biomes"))[1] -- World 1 (the world follows stadiumTier from the World 2 step)
 local Format = require(Shared:WaitForChild("Format"))
 local Formulas = require(Shared:WaitForChild("Formulas"))
+local Mascots = require(Config:WaitForChild("Mascots"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Config:WaitForChild("Tuning"))
@@ -47,6 +51,19 @@ local waiting: { [number]: { Moment } } = {} -- hitId -> moments whose flight ha
 local popups: { Popup } = {}
 local nextPopup = 1
 local worldFolder: Folder
+
+local CATCH_TOAST_TIME = 1.8 -- seconds the catch toast stays fully visible
+local CATCH_MEMORY = 20 -- seconds a catch or landing is remembered while waiting for the other
+
+local toastFrame: Frame
+local toastTitle: TextLabel
+local toastDetail: TextLabel
+local toastSold: TextLabel
+local toastShownAt = 0
+local toastFades: { Tween } = {} -- the fade-out playing, cancelled when a new toast shows
+local catchesWaiting: { [number]: { catch: any, at: number } } = {} -- hitId -> catch not landed yet
+local landedHits: { [number]: number } = {} -- hitId -> when its final landing showed
+local catchShown: { [number]: boolean } = {}
 
 local function text(props: { [string]: any }): TextLabel
 	local l = Instance.new("TextLabel")
@@ -258,6 +275,120 @@ local function showLanding(position: Vector3, distance: number)
 	end)
 end
 
+local function displayNameIn(list: { any }, id: string): string?
+	for _, entry in list do
+		if entry.id == id then
+			return entry.displayName
+		end
+	end
+	return nil
+end
+
+local function rarityOf(id: string): any
+	return Mascots.Rarities[Mascots.RarityRank[id] or 1]
+end
+
+local function showCatch(hitId: number, catch: any)
+	if catchShown[hitId] then
+		return
+	end
+	catchShown[hitId] = true
+	local species = Mascots.ById[catch.species]
+	if species == nil then
+		return
+	end
+	local rarity = rarityOf(species.rarity)
+	toastTitle.Text = `{if catch.isNewSpecies then "NEW! " else ""}Caught {species.displayName}!`
+	toastTitle.TextColor3 = rarity.color
+
+	local parts = { rarity.displayName }
+	local variant = displayNameIn(Tuning.Catch.VARIANTS, catch.variant)
+	if variant then
+		table.insert(parts, variant)
+	end
+	local size = displayNameIn(Tuning.Catch.SIZES, catch.size)
+	if size then
+		table.insert(parts, size)
+	end
+	table.insert(parts, `${Format.number(catch.cashPerSec)}/s`)
+	if catch.placedIn == "seat" then
+		table.insert(parts, `Seat {catch.slot}`)
+	elseif catch.placedIn == "hotbar" then
+		table.insert(parts, `Hotbar {catch.slot}`)
+	end
+	toastDetail.Text = table.concat(parts, "  ·  ")
+
+	local sold = catch.sold
+	local soldSpecies = if type(sold) == "table" then Mascots.ById[sold.species] else nil
+	if soldSpecies then
+		toastSold.Text = `Sold {soldSpecies.displayName} +${Format.number(sold.cash)}`
+		toastSold.Visible = true
+	else
+		toastSold.Visible = false
+	end
+
+	-- Stop the previous toast's fade, or it would keep fading this one out.
+	for _, tween in toastFades do
+		tween:Cancel()
+	end
+	table.clear(toastFades)
+	toastFrame.Visible = true
+	toastFrame.BackgroundTransparency = 0.35
+	for _, l in { toastTitle, toastDetail, toastSold } do
+		l.TextTransparency = 0
+		l.TextStrokeTransparency = 0.3
+	end
+	local shownAt = os.clock()
+	toastShownAt = shownAt
+	task.delay(CATCH_TOAST_TIME, function()
+		if toastShownAt ~= shownAt then
+			return -- a newer catch took over the toast
+		end
+		local fade = TweenInfo.new(0.4)
+		table.insert(toastFades, TweenService:Create(toastFrame, fade, { BackgroundTransparency = 1 }))
+		for _, l in { toastTitle, toastDetail, toastSold } do
+			table.insert(
+				toastFades,
+				TweenService:Create(l, fade, { TextTransparency = 1, TextStrokeTransparency = 1 })
+			)
+		end
+		for _, tween in toastFades do
+			tween:Play()
+		end
+		task.delay(0.4, function()
+			if toastShownAt == shownAt then
+				toastFrame.Visible = false
+			end
+		end)
+	end)
+end
+
+local function forgetOld()
+	local cutoff = os.clock() - CATCH_MEMORY
+	for hitId, at in landedHits do
+		if at < cutoff then
+			landedHits[hitId] = nil
+			catchShown[hitId] = nil
+		end
+	end
+	for hitId, waitingCatch in catchesWaiting do
+		if waitingCatch.at < cutoff then
+			catchesWaiting[hitId] = nil
+		end
+	end
+end
+
+local function onHitResult(result: any)
+	if type(result) ~= "table" or type(result.hitId) ~= "number" or type(result.catch) ~= "table" then
+		return
+	end
+	if landedHits[result.hitId] then
+		showCatch(result.hitId, result.catch) -- the ball already landed: show it now
+	else
+		catchesWaiting[result.hitId] = { catch = result.catch, at = os.clock() }
+	end
+end
+
 local function onTouchdown(
 	hitId: number,
 	segmentIndex: number,
@@ -266,6 +397,15 @@ local function onTouchdown(
 	isFinal: boolean
 )
 	showLanding(position, distance)
+	if isFinal then
+		forgetOld()
+		landedHits[hitId] = landedHits[hitId] or os.clock()
+		local waitingCatch = catchesWaiting[hitId]
+		if waitingCatch then
+			catchesWaiting[hitId] = nil
+			showCatch(hitId, waitingCatch.catch)
+		end
+	end
 	HighlightController.Landed:Fire({
 		hitId = hitId,
 		segmentIndex = segmentIndex,
@@ -301,6 +441,42 @@ function HighlightController.Init()
 		Size = UDim2.fromScale(1, 0.3),
 		Parent = bannerFrame,
 	})
+	-- Catch toast: bottom center, clear of the SWING button (bottom right).
+	toastFrame = Instance.new("Frame")
+	toastFrame.Name = "CatchToast"
+	toastFrame.AnchorPoint = Vector2.new(0.5, 1)
+	toastFrame.Position = UDim2.fromScale(0.5, 0.95)
+	toastFrame.Size = UDim2.fromScale(0.44, 0.17) -- narrow enough to clear SWING on small phones
+	toastFrame.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
+	toastFrame.BackgroundTransparency = 1
+	toastFrame.Visible = false
+	toastFrame.Parent = gui
+	local toastLimit = Instance.new("UISizeConstraint")
+	toastLimit.MaxSize = Vector2.new(520, 120)
+	toastLimit.Parent = toastFrame
+	Instance.new("UICorner").Parent = toastFrame
+	toastTitle = text({
+		Name = "Title",
+		Position = UDim2.fromScale(0.04, 0.06),
+		Size = UDim2.fromScale(0.92, 0.42),
+		Parent = toastFrame,
+	})
+	toastDetail = text({
+		Name = "Detail",
+		Font = Enum.Font.GothamBold,
+		Position = UDim2.fromScale(0.04, 0.5),
+		Size = UDim2.fromScale(0.92, 0.22),
+		Parent = toastFrame,
+	})
+	toastSold = text({
+		Name = "Sold",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Color3.fromRGB(255, 220, 90),
+		Position = UDim2.fromScale(0.04, 0.74),
+		Size = UDim2.fromScale(0.92, 0.2),
+		Parent = toastFrame,
+	})
+
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 	worldFolder = Instance.new("Folder")
@@ -313,6 +489,7 @@ end
 
 function HighlightController.Start()
 	Remotes.Event("Highlight").OnClientEvent:Connect(onHighlight)
+	Remotes.Event("HitResult").OnClientEvent:Connect(onHitResult)
 	BallController.Launched:Connect(onLaunched)
 	BallController.Touchdown:Connect(onTouchdown)
 end

@@ -1,10 +1,9 @@
 --!strict
 -- InputController: a tap anywhere in the world (not on a button or menu), a mouse click,
--- or the SWING button swings. Each swing plays the bat animation; if a pitch is in play it
--- sends Swing(pitchId, tapTime) once — one swing per pitch, early and late swings are whiffs.
--- The client predicts the result with the server's own judge (Formulas.judgeSwing) so a hit
--- connects and "Too early!" shows instantly; the server's answer is final.
--- Taps with no pitch in play only swing the bat.
+-- or the SWING button swings. Each swing plays the bat animation. Every tap on the pitch in play
+-- is a hit (CLAUDE.md): the ball launches at once and Swing(pitchId) goes to the server, which
+-- computes the numbers from stats only. One hit per pitch. Taps with no pitch in play only
+-- swing the bat.
 -- While the ball-cam is away, taps only count if a pitch is somehow already in play.
 
 local Players = game:GetService("Players")
@@ -14,7 +13,6 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BatPose = require(Shared:WaitForChild("BatPose"))
-local Formulas = require(Shared:WaitForChild("Formulas"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 
@@ -69,7 +67,6 @@ local function playSwing()
 end
 
 local function swing()
-	local tapTime = workspace:GetServerTimeNow()
 	local pitch = PitcherController.TakePending()
 	if CameraController.IsActive() then
 		-- The camera is away. Normally no pitch is in play then; if lag let one through,
@@ -83,13 +80,8 @@ local function swing()
 	if pitch == nil then
 		return
 	end
-	local quality = Formulas.judgeSwing(tapTime - pitch.arriveAt)
-	if quality == "early" or quality == "late" then
-		HudController.ShowJudgement(pitch.pitchId, quality)
-	else
-		BallController.Contact(pitch.pitchId)
-	end
-	Remotes.Event("Swing"):FireServer(pitch.pitchId, tapTime)
+	BallController.Hit(pitch.pitchId)
+	Remotes.Event("Swing"):FireServer(pitch.pitchId)
 end
 
 function InputController.Start()

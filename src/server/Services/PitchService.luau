@@ -1,14 +1,11 @@
 --!strict
 -- PitchService: the pitcher slot. Each player has one active Pitcher and at most one pitch in play.
--- One swing per pitch. The swing is judged by when it happened relative to the ball reaching
--- the plate (Formulas.judgeSwing): Perfect or Good is a hit, early or late is a whiff, and either
--- way the pitch is over. The client reports its tap time; it's trusted only within the player's
--- ping (plus Timing.LAG_SLACK), so laggy phones aren't punished and nobody can claim an old time.
--- A whiff or an unswung pitch brings the next pitch after the pitcher's cooldown; after a hit,
--- SwingService calls QueueNext once it knows how long the ball-cam will take.
---   PitchService.ConsumePitch(player, pitchId, tapTime) -> (pitch, quality) for a hit,
---                                                          (nil, "early"/"late") for a whiff,
---                                                          (nil, nil) if it doesn't match the pitch in play
+-- Every tap on the pitch in play is a hit (CLAUDE.md guardrail 1): there is no timing judgement.
+-- One hit per pitch, so tapping faster than the pitcher throws gains nothing.
+-- The pitch stays open until LATE_WINDOW after it reaches the plate, plus SERVER_GRACE on the
+-- server so a tap from a slow connection still lands. An unswung pitch brings the next one after
+-- the cooldown; after a hit, SwingService calls QueueNext once it knows how long the ball-cam takes.
+--   PitchService.ConsumePitch(player, pitchId) -> the pitch if it's the one in play, else nil
 --   PitchService.QueueNext(player, delay)      -> throw the next pitch after `delay` (at least the cooldown)
 --   PitchService.GetTravelTime(player)         -> the active pitcher's release-to-plate seconds
 --   PitchService.SetPitcher(player, pitcher)   -> swap the active Pitcher (pitcher pets later)
@@ -30,7 +27,6 @@ local DEFAULT_PITCHER = "pitching_machine"
 type State = {
 	pitcher: HookTypes.Pitcher,
 	pending: HookTypes.Pitch?,
-	expired: HookTypes.Pitch?, -- the last pitch nobody swung at, so a very late swing still gets "late"
 	lastId: number,
 	token: number, -- bumps on every schedule; stale timers check it and stop
 }
@@ -41,21 +37,6 @@ local pitchers: { [string]: HookTypes.Pitcher } = {}
 local states: { [Player]: State } = {}
 
 local schedule: (player: Player, state: State, delay: number) -> ()
-
--- How far back a reported tap time may be: the player's latency (capped) plus slack.
-local function lagAllowance(player: Player): number
-	return math.clamp(player:GetNetworkPing(), 0, Tuning.Camera.MAX_PING_ALLOWANCE) + Tuning.Timing.LAG_SLACK
-end
-
--- The most lag allowance anyone can get; pitches wait this long for a late swing.
-local MAX_ALLOWANCE = Tuning.Camera.MAX_PING_ALLOWANCE + Tuning.Timing.LAG_SLACK
-
--- Seconds until a pitch's ball has flown past the plate and gone, plus the cooldown:
--- the next pitch never shows up while the last one is still on screen.
-local function afterBallGone(player: Player, state: State, pitch: HookTypes.Pitch): number
-	local gone = pitch.arriveAt + Tuning.Timing.MISS_FLY_TIME - workspace:GetServerTimeNow()
-	return math.max(gone, 0) + state.pitcher.cooldown(player)
-end
 
 local function throw(player: Player, state: State)
 	if player.Parent ~= Players or states[player] ~= state then
@@ -69,17 +50,16 @@ local function throw(player: Player, state: State)
 		pitcherId = state.pitcher.id,
 		releaseAt = now,
 		arriveAt = arriveAt,
-		expiresAt = arriveAt + Tuning.Timing.GOOD_LATE,
+		expiresAt = arriveAt + Tuning.Pitch.LATE_WINDOW,
 	}
 	state.pending = pitch
 	Remotes.Event("Pitch"):FireClient(player, pitch)
 
-	-- Not swung at: once even the laggiest accepted swing can no longer arrive, throw the next one.
-	task.delay(pitch.expiresAt - now + MAX_ALLOWANCE, function()
+	-- Not swung at: throw the next one (after the grace for taps still on their way).
+	task.delay(pitch.expiresAt - now + Tuning.Pitch.SERVER_GRACE, function()
 		if states[player] == state and state.pending == pitch then
 			state.pending = nil
-			state.expired = pitch
-			schedule(player, state, afterBallGone(player, state, pitch))
+			schedule(player, state, state.pitcher.cooldown(player))
 		end
 	end)
 end
@@ -98,7 +78,6 @@ local function startPitching(player: Player, data: any)
 	local state: State = {
 		pitcher = pitchers[data.pitcher] or pitchers[DEFAULT_PITCHER],
 		pending = nil,
-		expired = nil,
 		lastId = 0,
 		token = 0,
 	}
@@ -109,44 +88,22 @@ local function startPitching(player: Player, data: any)
 	schedule(player, state, Tuning.Pitch.FIRST_PITCH_DELAY)
 end
 
--- Judges a swing at the pitch in play and ends that pitch.
-function PitchService.ConsumePitch(
-	player: Player,
-	pitchId: number,
-	tapTime: unknown
-): (HookTypes.Pitch?, HookTypes.SwingQuality?)
+-- Ends the pitch in play and returns it if `pitchId` matches it; otherwise nil (repeat taps,
+-- stale ids). Any tap on the pitch in play is a hit.
+function PitchService.ConsumePitch(player: Player, pitchId: number): HookTypes.Pitch?
 	local state = states[player]
 	if state == nil then
-		return nil, nil
+		return nil
 	end
 	local pitch = state.pending
 	if pitch == nil or pitch.pitchId ~= pitchId then
-		local expired = state.expired
-		if expired and expired.pitchId == pitchId then
-			state.expired = nil -- answer once; repeats are ignored
-			return nil, "late"
-		end
-		return nil, nil
+		return nil
 	end
-
-	-- The client's tap time, held to what's plausible for this player's lag.
-	local now = workspace:GetServerTimeNow()
-	local swungAt = now
-	if type(tapTime) == "number" and tapTime == tapTime then -- a number, not NaN
-		swungAt = math.clamp(tapTime, now - lagAllowance(player), now + 0.05)
-	end
-
 	state.pending = nil
-	state.expired = nil
-	local quality = Formulas.judgeSwing(swungAt - pitch.arriveAt)
-	if quality == "early" or quality == "late" then
-		schedule(player, state, afterBallGone(player, state, pitch))
-		return nil, quality
-	end
 	-- The caller calls QueueNext with the real delay. This backup (the longest possible ball-cam)
 	-- keeps pitches coming if anything fails before that.
 	schedule(player, state, Formulas.ballCamTime(math.huge))
-	return pitch, quality
+	return pitch
 end
 
 function PitchService.QueueNext(player: Player, delay: number)

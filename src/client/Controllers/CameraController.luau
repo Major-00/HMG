@@ -76,6 +76,8 @@ local function beginReturn(state: Cam)
 	state.phaseStart = os.clock()
 	state.returnFrom = camera().CFrame
 	state.cutSwapped = false
+	-- The server may have corrected the flight's distance since launch; decide swoop or cut once.
+	state.distance = BallController.GetDistance(state.hitId) or state.distance
 end
 
 local function onLaunched(hitId: number, info: any)

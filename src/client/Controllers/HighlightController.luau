@@ -1,8 +1,10 @@
 --!strict
 -- HighlightController: the big moments of a hit. Display only.
 --   * Highlight "biome" (from HighlightService, first time this run): when the ball crosses that
---     biome's start line, a big banner with the biome name and the crossing distance. Several new
---     biomes in one hit queue one after another. A camera pet hooks in here later.
+--     biome's start line, "PERFECT!" plus a big banner with the biome name and the crossing
+--     distance. Several new biomes in one hit queue one after another. A camera pet hooks in later.
+--   * Highlight "record" (the best distance passed a milestone): "PERFECT!" as the ball passes it.
+--     Celebrations are given on milestones, never for tap skill (CLAUDE.md guardrail 5).
 --   * Every landing: the distance pops up at the landing spot, then `Landed` fires.
 --   HighlightController.Landed -> Signal ({ hitId, segmentIndex, position, distance, biomeName, isFinal })
 --     The client side of the on-land hook, at the moment the ball visibly lands. The server's
@@ -22,6 +24,7 @@ local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Config:WaitForChild("Tuning"))
 
 local BallController = require(script.Parent.BallController)
+local HudController = require(script.Parent.HudController)
 
 local LAUNCH_WAIT = 1 -- seconds to wait for a highlight's flight before showing the banner anyway
 local POPUP_LIFETIME = 1.4
@@ -38,7 +41,9 @@ local bannerTitle: TextLabel
 local bannerSub: TextLabel
 local bannerQueue: { number } = {}
 local bannerBusy = false
-local waiting: { [number]: { number } } = {} -- hitId -> biome indexes whose flight hasn't started
+-- A celebration waiting for the ball to pass `distance`.
+type Moment = { distance: number, show: () -> () }
+local waiting: { [number]: { Moment } } = {} -- hitId -> moments whose flight hasn't started
 local popups: { Popup } = {}
 local nextPopup = 1
 local worldFolder: Folder
@@ -113,24 +118,43 @@ playNextBanner = function()
 	end)
 end
 
-local function watchCrossing(hitId: number, biomeIndex: number): boolean
-	return BallController.WatchDistance(hitId, Tuning.BiomeStarts[biomeIndex], function()
-		showBanner(biomeIndex)
-	end)
+local function watch(hitId: number, moment: Moment): boolean
+	return BallController.WatchDistance(hitId, moment.distance, moment.show)
 end
 
 local function onHighlight(highlight: any)
-	if type(highlight) ~= "table" or highlight.kind ~= "biome" then
+	if type(highlight) ~= "table" or type(highlight.hitId) ~= "number" then
 		return
 	end
-	local hitId, index = highlight.hitId, highlight.biomeIndex
-	if type(hitId) ~= "number" or type(index) ~= "number" or Biomes[index] == nil then
+	local hitId = highlight.hitId
+	local moment: Moment
+	if highlight.kind == "biome" then
+		local index = highlight.biomeIndex
+		if type(index) ~= "number" or Biomes[index] == nil then
+			return
+		end
+		moment = {
+			distance = Tuning.BiomeStarts[index],
+			show = function()
+				HudController.Celebrate(hitId)
+				showBanner(index)
+			end,
+		}
+	elseif highlight.kind == "record" and type(highlight.distance) == "number" then
+		moment = {
+			distance = highlight.distance,
+			show = function()
+				HudController.Celebrate(hitId)
+			end,
+		}
+	else
 		return
 	end
-	if watchCrossing(hitId, index) then
+
+	if watch(hitId, moment) then
 		return
 	end
-	-- The flight hasn't started (or was dropped). Wait briefly, then show it regardless.
+	-- No flight for this hit yet (or it was dropped). Wait briefly, then show it regardless.
 	local list = waiting[hitId]
 	if list == nil then
 		list = {}
@@ -138,12 +162,12 @@ local function onHighlight(highlight: any)
 		task.delay(LAUNCH_WAIT, function()
 			local left = waiting[hitId]
 			waiting[hitId] = nil
-			for _, i in left or {} do
-				showBanner(i)
+			for _, m in left or {} do
+				m.show()
 			end
 		end)
 	end
-	table.insert(list, index)
+	table.insert(list, moment)
 end
 
 local function onLaunched(hitId: number)
@@ -152,9 +176,9 @@ local function onLaunched(hitId: number)
 		return
 	end
 	waiting[hitId] = nil
-	for _, index in list do
-		if not watchCrossing(hitId, index) then
-			showBanner(index)
+	for _, moment in list do
+		if not watch(hitId, moment) then
+			moment.show()
 		end
 	end
 end

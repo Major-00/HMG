@@ -1,7 +1,7 @@
 --!strict
 -- PitcherController: receives each Pitch, plays the active pitcher's throw, and keeps the
 -- pitch in play so a tap can be sent for it. One swing per pitch: TakePending clears it.
---   PitcherController.TakePending() -> the pitch in play (and clears it), or nil once the ball is gone
+--   PitcherController.TakePending() -> the pitch in play (and clears it), or nil if there is none
 --   PitcherController.GetLane()     -> this player's lane model, or nil
 
 local Players = game:GetService("Players")
@@ -10,7 +10,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local HookTypes = require(Shared:WaitForChild("HookTypes"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
-local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 
 local BallController = require(script.Parent.BallController)
 
@@ -34,7 +33,7 @@ end
 
 function PitcherController.TakePending(): HookTypes.Pitch?
 	local pitch = pending
-	if pitch == nil or workspace:GetServerTimeNow() > pitch.arriveAt + Tuning.Timing.MISS_FLY_TIME then
+	if pitch == nil or workspace:GetServerTimeNow() > pitch.expiresAt then
 		return nil
 	end
 	pending = nil

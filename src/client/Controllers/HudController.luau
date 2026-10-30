@@ -4,7 +4,7 @@
 --   filled to the last hit. Bottom-right: the big SWING button. A short "+Power +Wins" popup per hit.
 -- Display only: every value comes from the server (StateController and HitResult).
 --   HudController.SwingPressed -> Signal fired when the SWING button is pressed
---   HudController.ShowJudgement(pitchId, quality) -> "PERFECT!" / "Too early!" / "Too late!" (once per pitch)
+--   HudController.Celebrate(hitId) -> "PERFECT!" (once per hit). Given on milestones, never for skill.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -210,22 +210,16 @@ end
 
 local popupTween: Tween? = nil
 local judgementTween: Tween? = nil
-local lastJudged: number? = nil
+local lastCelebrated: number? = nil
 
-local JUDGEMENTS = {
-	perfect = { text = "PERFECT!", color = Color3.fromRGB(255, 215, 70) },
-	early = { text = "Too early!", color = Color3.fromRGB(150, 200, 255) },
-	late = { text = "Too late!", color = Color3.fromRGB(255, 150, 130) },
-}
-
-function HudController.ShowJudgement(pitchId: number, quality: string)
-	local style = JUDGEMENTS[quality]
-	if style == nil or lastJudged == pitchId then
-		return -- "good" shows nothing extra; each pitch is judged once on screen
+-- "PERFECT!" for a given moment (a record milestone or a new biome). Once per hit.
+function HudController.Celebrate(hitId: number)
+	if lastCelebrated == hitId then
+		return
 	end
-	lastJudged = pitchId
-	judgement.Text = style.text
-	judgement.TextColor3 = style.color
+	lastCelebrated = hitId
+	judgement.Text = "PERFECT!"
+	judgement.TextColor3 = Color3.fromRGB(255, 215, 70)
 	judgement.TextTransparency = 0
 	judgement.TextStrokeTransparency = 0.3
 	if judgementTween then
@@ -233,16 +227,13 @@ function HudController.ShowJudgement(pitchId: number, quality: string)
 	end
 	judgementTween = TweenService:Create(
 		judgement,
-		TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 		{ TextTransparency = 1, TextStrokeTransparency = 1 }
 	);
 	(judgementTween :: Tween):Play()
 end
 
 local function onHit(result: any)
-	if result.quality == "perfect" then
-		HudController.ShowJudgement(result.hitId, "perfect")
-	end
 	barFill.Size = UDim2.fromScale(barPosition(result.distance), 1)
 	hitLabel.Text =
 		`Last hit: {Format.number(result.distance)} studs - {Formulas.biomeNameAt(result.distance)}`
@@ -275,11 +266,6 @@ function HudController.Start()
 	end)
 	refresh()
 	Remotes.Event("HitResult").OnClientEvent:Connect(onHit)
-	Remotes.Event("Whiff").OnClientEvent:Connect(function(info: any)
-		if type(info) == "table" and type(info.pitchId) == "number" then
-			HudController.ShowJudgement(info.pitchId, info.quality)
-		end
-	end)
 end
 
 return HudController

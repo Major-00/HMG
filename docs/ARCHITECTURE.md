@@ -59,7 +59,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/PitchService | **Pitcher slot.** Holds each player's active Pitcher, schedules pitches, keeps the one pending pitch. |
 | Services/SwingService | Handles `Swing`: matches it to the pending pitch, adds Power, makes the hit's first flight segment, queues the next pitch after the ball-cam. |
 | Services/LandingService | **On-land hook.** Runs the landing handlers, then finalizes distance, biome and Wins. |
-| Services/HighlightService | **Highlight event.** Detects biomes reached for the first time this run; fires a server Signal and the `Highlight` remote. Records are not fired yet (every early hit is one). |
+| Services/HighlightService | **Highlight event.** Biomes reached for the first time this run, and the best distance passing a record milestone; fires a server Signal and the `Highlight` remote. |
 | Services/ChallengeService | **Per-biome challenge.** Reads each biome's `challenge` slot. Does nothing while all are nil. |
 | Services/WorldService | Builds the batting area and pitcher spot at startup. |
 | Services/BatService | Buy and equip bats with Wins. |
@@ -78,7 +78,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Module | Job |
 |---|---|
 | Controllers/StateController | Latest snapshot from the server; others read it. |
-| Controllers/InputController | Tap anywhere (not on menus) or the swing button fires `Swing(pitchId, tapTime)` once per pitch; predicts the timing result; swings the bat. |
+| Controllers/InputController | Tap anywhere (not on menus) or the swing button launches the hit instantly and fires `Swing(pitchId)` once per pitch; swings the bat. |
 | Controllers/PitcherController | Shows the active pitcher and plays each `Pitch` using that pitcher's visual. |
 | Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
 | Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. |
@@ -110,7 +110,8 @@ number along one straight track, so the server never needs the biome geometry.
 PitchService ──Pitch──▶ client draws the throw (PitcherVisuals/<pitcherId>)
       │  (pending pitch stored on server)
 tap ──Swing(pitchId)──▶ SwingService
-      │  no pending pitch / wrong id → ignored (a whiff, no Power)
+      │  (the client has already launched the ball on tap; this confirms the numbers)
+      │  no pending pitch / repeat or stale id → ignored (one hit per pitch; nothing is lost)
       │  power += 1 × StatService.multiplier
       │  segment 1 = { from 0, to Formulas.distance(power), source "hit" }
       ▼
@@ -123,21 +124,22 @@ HighlightService: new best distance? new biome this run? → Signal + Highlight 
 ChallengeService: listens to landings; no-op while challenges are nil
       ▼
 PitchService.QueueNext: next pitch after the ball-cam (Formulas.ballCamTime), so it
-      reaches the plate just after the camera is back (a miss waits only the cooldown)
+      reaches the plate just after the camera is back (an unswung pitch waits only the cooldown)
 ```
 
 - **The ball-cam sets the pace.** Every hit is watched: the server holds the next pitch for
   `Formulas.ballCamTime(distance)` (air time + slow motion + landing hold + return), the same
-  numbers the client camera uses. Taps while the camera is away are ignored.
+  numbers the client camera uses. No pitch is in play while the camera is away, so those taps
+  only swing the bat; if lag ever lets a pitch through, a tap still hits it.
 - **Pitch cadence is the tap limit.** One pending pitch per player means no extra
   rate limiter is needed, and spam does nothing. A faster pitcher pet is a natural upgrade later.
-- **Timing matters, one swing per pitch:** the first tap on a pitch is judged by
-  `Formulas.judgeSwing` against the moment the ball reaches the plate (`Tuning.Timing`):
-  Perfect (±0.05s, +25% distance), Good (-0.2s to +0.15s), or a whiff ("Too early!" /
-  "Too late!") that uses up the pitch. The client sends its tap time; the server trusts it only
-  within the player's ping + `LAG_SLACK`, so phones on slow connections aren't punished and
-  nobody can claim an old time. The client predicts with the same judge for instant feedback;
-  the server's `HitResult` / `Whiff` is final.
+- **Every tap on a pitch is a hit** ([CLAUDE.md](../CLAUDE.md) guardrails 1–3): no timing,
+  no misses. The pitch can be hit from release until `Pitch.LATE_WINDOW` after it reaches the
+  plate (the server keeps it open `SERVER_GRACE` longer for slow connections). The client
+  launches the ball the instant you tap, to a predicted distance
+  (`Formulas.distance(power + last gain)`); the server's `HitResult` confirms it, and if it
+  differs (new multiplier, an on-land handler) the flight re-plans mid-air. The player never
+  waits for the server.
 - **First swing within 10s:** the first pitch is sent the moment the save loads, and the
   machine is visible from spawn.
 
@@ -158,7 +160,9 @@ hit lands, each handler sees the landing spot and may return one more `FlightSeg
 **Highlight event.** `HighlightService.Fired` (server Signal) plus the `Highlight` remote
 to that player, for `kind = "record"` (beats lifetime best distance) or `"biome"`
 (first time reaching a biome this run; one per biome if a hit reaches several). The client
-shows a banner when the ball crosses that biome's line. "record" is defined but not fired yet.
+shows "PERFECT!" and a banner when the ball crosses that biome's line. `"record"` fires when
+the best distance passes a milestone (100, 250, 500, 1K, 2.5K … studs) and shows "PERFECT!"
+as the ball passes it. Celebrations are given, never earned by tap skill.
 Later, a camera pet listens to the same event to save a clip.
 
 The client also has `HighlightController.Landed`, fired when the ball visibly lands (after
@@ -174,15 +178,14 @@ The server creates everything under `ReplicatedStorage.Remotes` at startup.
 
 | Direction | Name | Type | Payload |
 |---|---|---|---|
-| C → S | `Swing` | Event | `pitchId, tapTime` (client's server-clock time of the tap) |
+| C → S | `Swing` | Event | `pitchId` |
 | C → S | `GetData` | Function | → full snapshot of the caller's own save |
 | C → S | `BuyBat` / `EquipBat` | Function | `batId` → `{ ok, err? }` |
 | C → S | `HatchEgg` | Function | `eggId, count` → `{ ok, err?, pets }` |
 | C → S | `EquipPet` / `UnequipPet` | Function | `petUid` → `{ ok, err? }` |
 | C → S | `Rebirth` | Function | → `{ ok, err? }` |
 | S → C | `Pitch` | Event | `Pitch` (see HookTypes) |
-| S → C | `HitResult` | Event | `{ hitId, quality, powerGained, segments, distance, biomeIndex, winsGained }` |
-| S → C | `Whiff` | Event | `{ pitchId, quality }` ("early" or "late") |
+| S → C | `HitResult` | Event | `{ hitId, powerGained, segments, distance, biomeIndex, winsGained }` |
 | S → C | `Highlight` | Event | `Highlight` minus `player` |
 | S → C | `DataChanged` | Event | changed top-level keys only |
 
@@ -210,7 +213,7 @@ RemoteFunctions.
 }
 ```
 
-`lifetime.bestDistance` drives "record" highlights; `highestBiome` drives "biome" highlights.
+`lifetime.bestDistance` drives "record" highlights (milestones in `Tuning.Highlight.RECORD_MILESTONES`); `highestBiome` drives "biome" highlights.
 There's a version number for migrations and no Robux fields.
 
 ## 8. How the hard rules are enforced
@@ -223,3 +226,15 @@ There's a version number for migrations and no Robux fields.
 | Odds before purchase | EggController shows odds from the same `Config/Eggs` weights EggService rolls from. |
 | Original assets | Landmarks are ours; nothing from the Toolbox. |
 | 10s / 60s | First pitch on save load; Biome 2 distance tuned against early Power gain in the economy step. |
+
+## 9. Parked ideas (not in the main loop)
+
+Ideas that add skill or a way to fail stay here until they fit the guardrails in
+[CLAUDE.md](../CLAUDE.md). Nothing here may change main progression.
+
+- **Training Area: optional skill mini-game, no effect on main progression.** A separate
+  batting cage with timed swings: Perfect / Good / early / late windows around the ball
+  reaching the plate, one swing per pitch, and a lag-tolerant server check of the client's tap
+  time. This was built and then reverted from the main loop (commit `12825eb`, reverted in
+  "Revert timing, add guardrails") because it broke guardrails 1, 2, 3 and 6. If it returns, its
+  rewards must be cosmetic or separate from Power, distance and Wins.

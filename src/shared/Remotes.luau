@@ -11,8 +11,7 @@ local Remotes = {}
 
 -- Client -> Server (RemoteEvent)
 Remotes.Events = {
-	"Swing", -- (pitchId: number, tapTime: number). tapTime = the client's GetServerTimeNow() at the tap;
-	-- the server only trusts it within the player's ping. Ignored if it doesn't match the pending pitch.
+	"Swing", -- (pitchId: number). Always a hit if it matches the pitch in play; otherwise ignored.
 }
 
 -- Client -> Server (RemoteFunction, returns { ok: boolean, err: string?, ... })
@@ -29,8 +28,7 @@ Remotes.Functions = {
 -- Server -> Client (RemoteEvent)
 Remotes.ServerEvents = {
 	"Pitch", -- HookTypes.Pitch
-	"HitResult", -- { hitId, quality, powerGained, segments: {FlightSegment}, distance, biomeIndex, winsGained }
-	"Whiff", -- { pitchId, quality: "early" | "late" }: the swing missed; the pitch is over
+	"HitResult", -- { hitId, powerGained, pitcherBonus, segments: {FlightSegment}, distance, biomeIndex, winsGained }
 	"Highlight", -- HookTypes.Highlight without the player field
 	"DataChanged", -- { [topLevelKey]: newValue } for keys changed since the last frame
 }

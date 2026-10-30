@@ -1,12 +1,10 @@
 --!strict
 -- StatService: a player's total Power multiplier = bat x rebirth x pitcher bonus.
--- Pets join the product in the pets step. Numbers come from Config (Bats, Tuning).
+-- The formula is Formulas.multiplier (shared, so the client predicts the same number).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = ReplicatedStorage.Shared.Config
-local Bats = require(Config.Bats) :: any
-local Tuning = require(Config.Tuning)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
 
 local DataService = require(script.Parent.DataService)
 local PitchService = require(script.Parent.PitchService)
@@ -19,10 +17,7 @@ function StatService.GetMultiplier(player: Player): number
 	if data == nil then
 		return 0
 	end
-	local bat = Bats[data.bats.equipped]
-	local batMultiplier = if bat and bat.powerMultiplier then bat.powerMultiplier else 1
-	local rebirthMultiplier = 1 + data.rebirths * Tuning.Power.REBIRTH_BONUS
-	return batMultiplier * rebirthMultiplier * PitchService.GetPowerBonus(player)
+	return Formulas.multiplier(data, PitchService.GetPowerBonus(player))
 end
 
 return StatService

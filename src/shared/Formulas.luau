@@ -5,33 +5,47 @@
 local Config = script.Parent.Config
 local Tuning = require(Config.Tuning)
 local Biomes = require(Config.Biomes)
+local Bats = require(Config.Bats) :: any
 
 local Formulas = {}
+
+-- A player's total Power multiplier from their save: bat x rebirth x pitcher bonus.
+-- Shared so the client can predict a hit exactly (pets join the product in the pets step).
+function Formulas.multiplier(data: any, pitcherBonus: number): number
+	local bat = Bats[data.bats.equipped]
+	local batMultiplier = if bat and bat.powerMultiplier then bat.powerMultiplier else 1
+	local rebirthMultiplier = 1 + data.rebirths * Tuning.Power.REBIRTH_BONUS
+	return batMultiplier * rebirthMultiplier * pitcherBonus
+end
 
 -- Power gained from one hit, given the player's total multiplier.
 function Formulas.powerGain(multiplier: number): number
 	return Tuning.Power.PER_HIT * multiplier
 end
 
--- Hit distance in whole studs for a player's total Power. A Perfect swing adds the bonus.
-function Formulas.distance(power: number, perfect: boolean?): number
+-- Hit distance in whole studs for a player's total Power.
+function Formulas.distance(power: number): number
 	local d = Tuning.Distance
-	local base = d.BASE + d.PER_POWER * math.max(power, 0) ^ d.EXPONENT
-	return math.floor(if perfect then base * Tuning.Timing.PERFECT_DISTANCE_BONUS else base)
+	return math.floor(d.BASE + d.PER_POWER * math.max(power, 0) ^ d.EXPONENT)
 end
 
--- Judges a swing from `offset` = tap time minus the moment the ball reaches the plate.
--- Shared so the client's prediction and the server's decision use the same windows.
-function Formulas.judgeSwing(offset: number): "perfect" | "good" | "early" | "late"
-	local t = Tuning.Timing
-	if offset < -t.GOOD_EARLY then
-		return "early"
-	elseif offset > t.GOOD_LATE then
-		return "late"
-	elseif math.abs(offset) <= t.PERFECT then
-		return "perfect"
+-- The highest record milestone passed when the best distance goes from `previousBest` to
+-- `newBest`, or nil if none was passed.
+function Formulas.recordMilestone(previousBest: number, newBest: number): number?
+	local list = Tuning.Highlight.RECORD_MILESTONES
+	local passed: number? = nil
+	local milestone = list[1]
+	local i = 1
+	while milestone <= newBest do
+		if milestone > previousBest then
+			passed = milestone
+		end
+		i += 1
+		-- Past the list, keep the 1 - 2.5 - 5 - 10 pattern (x2.5, x2, x2).
+		local ratio = ({ 2.5, 2, 2 })[(i - #list - 1) % 3 + 1]
+		milestone = list[i] or milestone * ratio
 	end
-	return "good"
+	return passed
 end
 
 -- Wins paid for a hit that travelled `distance` studs.

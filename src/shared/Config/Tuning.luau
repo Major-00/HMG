@@ -15,17 +15,8 @@ local Tuning = {
 		MACHINE_TRAVEL_TIME = 0.7, -- seconds from release to the plate
 		MACHINE_COOLDOWN = 0.5, -- seconds after a hit (or a miss) before the next release
 		FIRST_PITCH_DELAY = 0.5, -- seconds after the character spawns before the first pitch
-	},
-
-	-- Swing timing, in seconds relative to the ball reaching the plate (negative = early).
-	-- One swing per pitch: a tap outside the Good window is a whiff and uses up the pitch.
-	Timing = {
-		GOOD_EARLY = 0.2, -- earliest hit: ball about 5.7 studs before the plate
-		GOOD_LATE = 0.15, -- latest hit: ball about 4.3 studs past the plate
-		PERFECT = 0.05, -- within this of the plate (either side) is a Perfect
-		PERFECT_DISTANCE_BONUS = 1.25, -- a Perfect hit flies (and pays) 25% further
-		LAG_SLACK = 0.1, -- extra seconds a tap's reported time may be older than the player's ping
-		MISS_FLY_TIME = 0.6, -- a missed ball keeps flying past the plate this long before it vanishes
+		LATE_WINDOW = 1.0, -- a tap still hits until this long after the ball reaches the plate
+		SERVER_GRACE = 1.0, -- the server keeps the pitch open this much longer for slow connections
 	},
 
 	Power = {
@@ -80,7 +71,6 @@ local Tuning = {
 		LINGER_TIME = 0.8, -- seconds the ball stays on the ground after landing
 		TRAIL_LIFETIME = 0.2, -- seconds a trail segment lasts (short = cheap)
 		MAX_BALLS = 6, -- most balls drawn at once per player
-		CONTACT_TIMEOUT = 1.5, -- seconds to wait for the server's hit result before dropping the ball
 	},
 
 	-- Ball-cam. The server also uses these (Formulas.ballCamTime) to hold the next pitch until
@@ -98,12 +88,14 @@ local Tuning = {
 		CUT_BEYOND = 250, -- landings farther than this cut back (fade) instead of swooping
 		CUT_TIME = 0.3, -- seconds for the fade-out + fade-in of a cut
 		PITCH_ARRIVE_AFTER_RETURN = 0.15, -- next ball reaches the plate this long after the camera is back
-		MAX_PING_ALLOWANCE = 0.5, -- most player latency (seconds) added to that wait
 	},
 
 	Highlight = {
 		BANNER_TIME = 1.4, -- seconds the biome banner stays fully visible ...
 		BANNER_QUEUED_TIME = 0.5, -- ... or this long when another banner is waiting
+		-- "PERFECT!" plays when the ball enters a new biome, or when a hit pushes your best distance
+		-- past one of these milestones (studs). Past the last one it keeps going x2, x2.5, x2 ...
+		RECORD_MILESTONES = { 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000 },
 	},
 
 	Swing = {

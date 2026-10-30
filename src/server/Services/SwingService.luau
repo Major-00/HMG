@@ -1,9 +1,8 @@
 --!strict
--- SwingService: handles Swing(pitchId, tapTime). A swing only counts if it matches the pitch in
--- play, and PitchService judges its timing. On a whiff: a Whiff message, nothing else.
--- On a hit: +Power (x multiplier), then distance from total Power (x the Perfect bonus), the
--- on-land hook, Wins from the final distance, and a HitResult to the client to draw.
--- The client sends only the pitch id and when it tapped; every number is decided here.
+-- SwingService: handles Swing(pitchId). Any tap on the pitch in play is a hit (CLAUDE.md):
+-- +Power (x multiplier), then distance from total Power, the on-land hook, Wins from the final
+-- distance, and a HitResult. The client has already drawn the hit; this confirms the numbers.
+-- The client sends only the pitch id; every number is decided here, from stats only.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -21,7 +20,7 @@ local StatService = require(Services.StatService)
 
 local SwingService = {}
 
-local function onSwing(player: Player, pitchId: unknown, tapTime: unknown)
+local function onSwing(player: Player, pitchId: unknown)
 	if type(pitchId) ~= "number" then
 		return
 	end
@@ -29,12 +28,9 @@ local function onSwing(player: Player, pitchId: unknown, tapTime: unknown)
 	if data == nil then
 		return -- never play on a save that isn't loaded
 	end
-	local pitch, quality = PitchService.ConsumePitch(player, pitchId, tapTime)
+	local pitch = PitchService.ConsumePitch(player, pitchId)
 	if pitch == nil then
-		if quality then -- swung too early or too late: the pitch is used up
-			Remotes.Event("Whiff"):FireClient(player, { pitchId = pitchId, quality = quality })
-		end
-		return -- otherwise no pitch in play or a repeat tap: ignored
+		return -- no pitch in play, a stale id, or a repeat tap on the same pitch
 	end
 
 	local gain = Formulas.powerGain(StatService.GetMultiplier(player))
@@ -45,22 +41,23 @@ local function onSwing(player: Player, pitchId: unknown, tapTime: unknown)
 
 	local landing = LandingService.Resolve(player, pitch.pitchId, {
 		from = 0,
-		to = Formulas.distance(power, quality == "perfect"),
+		to = Formulas.distance(power),
 		source = "hit",
 	})
 	local distance = landing.landedAt
 	local wins = Formulas.wins(distance)
 
 	-- Hold the next pitch until the ball-cam is back, so the ball reaches the plate just after.
-	-- The client's camera starts only when HitResult arrives, so add the player's latency (capped).
+	-- The client's camera started at the tap, before this swing reached the server, so it is
+	-- always back before the pitch arrives.
 	PitchService.QueueNext(
 		player,
 		Formulas.ballCamTime(distance)
 			- PitchService.GetTravelTime(player)
 			+ Tuning.Camera.PITCH_ARRIVE_AFTER_RETURN
-			+ math.clamp(player:GetNetworkPing(), 0, Tuning.Camera.MAX_PING_ALLOWANCE)
 	)
 	local previousHighest = data.highestBiome
+	local previousBest = data.lifetime.bestDistance
 
 	DataService.Update(player, "wins", function(current)
 		return current + wins
@@ -79,14 +76,14 @@ local function onSwing(player: Player, pitchId: unknown, tapTime: unknown)
 
 	Remotes.Event("HitResult"):FireClient(player, {
 		hitId = pitch.pitchId,
-		quality = quality,
 		powerGained = gain,
+		pitcherBonus = PitchService.GetPowerBonus(player), -- lets the client predict the next hit exactly
 		segments = landing.segments,
 		distance = distance,
 		biomeIndex = landing.biomeIndex,
 		winsGained = wins,
 	})
-	HighlightService.Evaluate(player, pitch.pitchId, distance, previousHighest)
+	HighlightService.Evaluate(player, pitch.pitchId, distance, previousHighest, previousBest)
 end
 
 function SwingService.Start()

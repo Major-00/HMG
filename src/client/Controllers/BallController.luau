@@ -1,14 +1,17 @@
 --!strict
--- BallController: draws balls. Cosmetic only; no stat math.
---   ShowPitch(pitch, from, to) -> ball travels from the pitcher to the strike point (and past it on a miss)
---   Contact(pitchId)           -> on tap, holds the ball at the strike point until the server answers
---   HitResult (remote)         -> flies the ball along each flight segment in an arc with a short trail;
---                                 the end of the final descent plays in slow motion for the ball-cam
+-- BallController: draws balls. Cosmetic only; the server decides every number.
+--   ShowPitch(pitch, from, to) -> ball travels from the pitcher to the strike point (and past it if unswung)
+--   Hit(pitchId)               -> on tap the ball launches at once (CLAUDE.md guardrail 3), flying to a
+--                                 predicted distance from the same formulas the server uses
+--   HitResult (remote)         -> the server's real flight. If it differs from the prediction (a new
+--                                 multiplier, an on-land handler) the flight re-plans to it mid-air.
+-- Flights are arcs with a short trail; the end of the final descent plays in slow motion for the ball-cam.
 -- Events for the camera and highlights:
 --   BallController.Launched      -> Signal (hitId, info) when a hit's flight starts;
 --                                   info = { distance, landing: Vector3, airTime }
 --   BallController.Touchdown     -> Signal (hitId, segmentIndex, position, distance, isFinal) at each landing
 --   BallController.GetBallPosition(hitId)    -> where that hit's ball is now, or nil once it's gone
+--   BallController.GetDistance(hitId)        -> that flight's current total distance, or nil
 --   BallController.WatchDistance(hitId, d, fn) -> calls fn once the ball passes `d` studs down the
 --                                   track; returns false if that hit has no flight (fn not called)
 -- Balls are pooled and capped (Tuning.Flight.MAX_BALLS) to stay cheap on low-end phones.
@@ -23,6 +26,8 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 
+local StateController = require(script.Parent.StateController)
+
 local FIELD_DIRECTION = Vector3.zAxis -- lanes fire down +Z (see WorldService)
 local BALL_SIZE = 0.9
 local GROUND_OFFSET = BALL_SIZE / 2
@@ -34,7 +39,6 @@ type PitchBall = {
 	pitch: HookTypes.Pitch,
 	from: Vector3,
 	to: Vector3,
-	contactUntil: number?, -- set on tap: hold at the strike point until this os.clock()
 }
 
 -- startT/endT are in flight time (0..airTime, before slow motion); see flightTime().
@@ -53,6 +57,8 @@ type Watch = { distance: number, fn: () -> () }
 type Flight = {
 	hitId: number,
 	ball: Ball,
+	strike: Vector3, -- where the hit started
+	distance: number, -- total distance of the current plan
 	startedAt: number,
 	airTime: number, -- flight time without slow motion
 	landAt: number, -- os.clock() of the final landing (slow motion included)
@@ -72,6 +78,8 @@ local pitches: { [number]: PitchBall } = {}
 local flights: { Flight } = {}
 local liveCount = 0
 local lastStrike: Vector3? = nil -- strike point of the latest pitch, for hits whose ball was dropped
+local pitcherBonus = 1 -- the active pitcher's Power bonus, from the last HitResult
+local localHits: { [number]: number } = {} -- hitId -> os.clock() of hits launched on tap
 
 -- Defined below; acquire() needs them to finish a flight it drops.
 local checkWatches: (flight: Flight, along: number, final: boolean) -> ()
@@ -136,11 +144,16 @@ local function acquire(): Ball?
 end
 
 function BallController.ShowPitch(pitch: HookTypes.Pitch, from: Vector3, to: Vector3)
-	-- Only one pitch is ever in play: clear any leftover ball that isn't waiting for a hit result.
+	-- Only one pitch is ever in play: clear any leftover ball.
 	for id, entry in pitches do
-		if entry.contactUntil == nil then
-			pitches[id] = nil
-			release(entry.ball)
+		pitches[id] = nil
+		release(entry.ball)
+	end
+	-- Forget hits launched long ago.
+	local now = os.clock()
+	for id, at in localHits do
+		if now - at > 15 then
+			localHits[id] = nil
 		end
 	end
 	local ball = acquire()
@@ -150,14 +163,6 @@ function BallController.ShowPitch(pitch: HookTypes.Pitch, from: Vector3, to: Vec
 	ball.part.Position = from
 	lastStrike = to
 	pitches[pitch.pitchId] = { ball = ball, pitch = pitch, from = from, to = to }
-end
-
-function BallController.Contact(pitchId: number)
-	local entry = pitches[pitchId]
-	if entry then
-		entry.contactUntil = os.clock() + Tuning.Flight.CONTACT_TIMEOUT
-		entry.ball.part.Position = entry.to
-	end
 end
 
 -- Flight time for `elapsed` real seconds: normal speed, then the last SLOWMO_PORTION of the
@@ -178,26 +183,14 @@ local function findFlight(hitId: number): Flight?
 	return nil
 end
 
-local function launch(entry: PitchBall?, result: any)
-	local strike = if entry then entry.to else lastStrike
-	if strike == nil or type(result.segments) ~= "table" or #result.segments == 0 then
-		if entry then
-			release(entry.ball)
-		end
-		return
-	end
-	local ball = if entry then entry.ball else acquire()
-	if ball == nil then
-		return
-	end
+-- Legs for a set of flight segments starting at `strike`.
+local function planLegs(strike: Vector3, segments: { any }, total: number): ({ Leg }, number)
 	local ground = strike - Vector3.new(0, Tuning.World.STRIKE_HEIGHT - GROUND_OFFSET, 0)
 	local f = Tuning.Flight
-
-	local total = result.distance
 	local airTime = Formulas.airTime(total)
 	local legs: { Leg } = {}
 	local t = 0
-	for i, segment in result.segments do
+	for i, segment in segments do
 		local length = math.max(segment.to - segment.from, 0)
 		local legTime = if total > 0 then airTime * length / total else airTime
 		table.insert(legs, {
@@ -211,11 +204,17 @@ local function launch(entry: PitchBall?, result: any)
 		})
 		t += legTime
 	end
+	return legs, airTime
+end
 
+local function launch(hitId: number, ball: Ball, strike: Vector3, segments: { any }, total: number)
+	local legs, airTime = planLegs(strike, segments, total)
 	local now = os.clock()
 	local flight: Flight = {
-		hitId = result.hitId,
+		hitId = hitId,
 		ball = ball,
+		strike = strike,
+		distance = total,
 		startedAt = now,
 		airTime = airTime,
 		landAt = now + Formulas.slowedAirTime(total),
@@ -223,13 +222,34 @@ local function launch(entry: PitchBall?, result: any)
 		touched = 0,
 		watches = {},
 	}
+	ball.part.Position = strike
 	ball.trail.Enabled = true
 	table.insert(flights, flight)
-	BallController.Launched:Fire(result.hitId, {
+	BallController.Launched:Fire(hitId, {
 		distance = total,
 		landing = legs[#legs].endPos,
 		airTime = flight.landAt - now,
 	})
+end
+
+-- The tap: launch now, to the predicted distance. Every tap on a pitch is a hit.
+function BallController.Hit(pitchId: number)
+	local entry = pitches[pitchId]
+	if entry == nil then
+		return
+	end
+	pitches[pitchId] = nil
+	localHits[pitchId] = os.clock()
+	local data = StateController.Get()
+	local predicted = if data
+		then Formulas.distance(data.power + Formulas.powerGain(Formulas.multiplier(data, pitcherBonus)))
+		else Formulas.distance(Tuning.Power.PER_HIT)
+	launch(pitchId, entry.ball, entry.to, { { from = 0, to = predicted, source = "hit" } }, predicted)
+end
+
+function BallController.GetDistance(hitId: number): number?
+	local flight = findFlight(hitId)
+	return if flight then flight.distance else nil
 end
 
 function BallController.GetBallPosition(hitId: number): Vector3?
@@ -286,21 +306,47 @@ checkTouchdowns = function(flight: Flight, t: number)
 	end
 end
 
--- The server judged the swing a whiff. If this client predicted a hit and is holding the
--- ball at the plate, let it go.
-local function onWhiff(info: any)
-	local id = type(info) == "table" and info.pitchId
-	local entry = if type(id) == "number" then pitches[id] else nil
-	if entry and entry.contactUntil then
-		pitches[id] = nil
-		release(entry.ball)
-	end
-end
-
+-- The server's hit. Usually it matches the prediction; if not, re-plan the flight in the air.
 local function onHitResult(result: any)
+	if type(result) ~= "table" or type(result.segments) ~= "table" or #result.segments == 0 then
+		return
+	end
+	if type(result.pitcherBonus) == "number" then
+		pitcherBonus = result.pitcherBonus
+	end
+	local flight = findFlight(result.hitId)
+	if flight then
+		if flight.distance ~= result.distance then
+			local legs, airTime = planLegs(flight.strike, result.segments, result.distance)
+			flight.distance = result.distance
+			if flight.touched < #flight.legs then
+				-- Still in the air: re-plan to the server's flight.
+				flight.legs = legs
+				flight.airTime = airTime
+				flight.landAt = flight.startedAt + Formulas.slowedAirTime(result.distance)
+			else
+				-- Already landed (very slow connection): move the ball to the real spot and show it.
+				flight.legs = legs
+				flight.ball.part.Position = legs[#legs].endPos
+				local last = legs[#legs]
+				BallController.Touchdown:Fire(flight.hitId, #legs, last.endPos, last.toDist, true)
+			end
+		end
+		return
+	end
+	if localHits[result.hitId] then
+		return -- this hit was already shown on tap and has finished; don't fly it twice
+	end
+	-- No predicted flight (the ball was dropped, or the tap came from elsewhere): launch now.
 	local entry = pitches[result.hitId]
 	pitches[result.hitId] = nil
-	launch(entry, result)
+	local strike = if entry then entry.to else lastStrike
+	local ball = if entry then entry.ball else acquire()
+	if strike and ball then
+		launch(result.hitId, ball, strike, result.segments, result.distance)
+	elseif ball then
+		release(ball)
+	end
 end
 
 local function step()
@@ -308,14 +354,8 @@ local function step()
 	local now = os.clock()
 
 	for id, entry in pitches do
-		if entry.contactUntil then
-			if now > entry.contactUntil then
-				-- The server never confirmed the hit (too late or rejected).
-				pitches[id] = nil
-				release(entry.ball)
-			end
-		elseif serverNow > entry.pitch.arriveAt + Tuning.Timing.MISS_FLY_TIME then
-			pitches[id] = nil -- missed, gone
+		if serverNow > entry.pitch.expiresAt then
+			pitches[id] = nil -- not swung at, gone
 			release(entry.ball)
 		else
 			local p = entry.pitch
@@ -359,7 +399,6 @@ end
 
 function BallController.Start()
 	Remotes.Event("HitResult").OnClientEvent:Connect(onHitResult)
-	Remotes.Event("Whiff").OnClientEvent:Connect(onWhiff)
 	-- Just before the camera, so the ball-cam always reads this frame's ball position.
 	RunService:BindToRenderStep("BallStep", Enum.RenderPriority.Camera.Value - 1, step)
 end

@@ -19,6 +19,11 @@ Remotes.Functions = {
 	"GetData", -- () -> full snapshot of the caller's own save, or nil if it never loaded
 	"BuyBat", -- (batId: string)
 	"EquipBat", -- (batId: string)
+	"SellMascot", -- (uid: string) -> { ok, err?, cash?, species? }; refused if locked
+	"LockMascot", -- (uid: string, locked: boolean)
+	"MoveMascot", -- (uid: string, place: "seats" | "hotbar" | "onDeck", slot: number); swaps if taken
+	"EquipBest", -- () seats the top 10 earners
+	"SetAutoSell", -- (on: boolean) sells nothing by itself
 }
 
 -- Server -> Client (RemoteEvent)

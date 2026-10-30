@@ -9,6 +9,9 @@
 --   DevData:Invoke("simcatch", userId, n, distance) -> n catch rolls at `distance` with the
 --     player's world and best ball, compared with Formulas.catchOdds (changes nothing)
 --   DevData:Invoke("selftest", userId, ops?) -> MascotInventory rule tests (changes nothing)
+--   Mascot actions, same path as the remotes:
+--     "lock" (uid, locked?), "autosell" (on), "equipbest", "sell" (uid),
+--     "move" (uid, place, slot), "grant" (speciesId, variant?, size?) -> adds it like a catch
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -23,6 +26,7 @@ local Tuning = require(ReplicatedStorage.Shared.Config.Tuning)
 local Template = require(script.Parent.Parent.Data.Template)
 local DataService = require(script.Parent.DataService)
 local LandingService = require(script.Parent.LandingService)
+local MascotService = require(script.Parent.MascotService)
 
 local DevService = {}
 
@@ -171,7 +175,7 @@ function DevService.Start()
 
 	local devData = Instance.new("BindableFunction")
 	devData.Name = "DevData"
-	devData.OnInvoke = function(command: string, userId: number, key: string?, value: any)
+	devData.OnInvoke = function(command: string, userId: number, key: any, value: any, extra: any)
 		local player = Players:GetPlayerByUserId(userId)
 		if player == nil then
 			return nil
@@ -203,6 +207,19 @@ function DevService.Start()
 		elseif command == "selftest" then
 			local MascotInventoryTest = require(script.Parent.Parent.Dev.MascotInventoryTest) :: any
 			return MascotInventoryTest.Run(tonumber(key))
+		-- Mascot actions, through the same MascotService functions the remotes use.
+		elseif command == "lock" then
+			return MascotService.SetLock(player, key, value ~= false)
+		elseif command == "autosell" then
+			return MascotService.SetAutoSell(player, key == true)
+		elseif command == "equipbest" then
+			return MascotService.EquipBest(player)
+		elseif command == "sell" then
+			return MascotService.Sell(player, key)
+		elseif command == "move" then
+			return MascotService.Move(player, key, value, extra)
+		elseif command == "grant" then
+			return MascotService.Grant(player, key, value, extra)
 		end
 		return nil
 	end

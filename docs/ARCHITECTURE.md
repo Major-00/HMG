@@ -160,7 +160,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/PitchService | **Pitcher slot.** Holds each player's active Pitcher, schedules pitches, keeps the one pending pitch, and brings the next pitch forward on `Ready` (never inside the minimum gap). |
 | Services/SwingService | Handles `Swing`: matches it to the pending pitch, adds Power, makes the hit's first flight segment, queues the next pitch after the ball-cam and reveal. |
 | Services/LandingService | **On-land hook.** Runs the push handlers, then the catch phase (`SetCatcher`), then fires `Landed` with the final distance, biome and catch. |
-| Services/MascotService | Sets the catch phase: rolls species, variant and size on the server, updates the Index and lifetime count, places the catch with `MascotInventory`, checks the result before writing it, pays sales at full value. (Planned: Sell, Lock, Move, Equip Best and Auto-Sell remotes.) |
+| Services/MascotService | Sets the catch phase: rolls species, variant and size on the server, updates the Index and lifetime count, places the catch with `MascotInventory`, checks the result before writing it, pays sales at full value. Handles the Sell, Lock, Move, Equip Best and Auto-Sell remotes (type-checked, 10 actions/s per player). |
 | Services/MascotInventory | Pure rules for seats, hotbar, On Deck, Auto-Sell, Lock, Sell, Move (swap) and Equip Best, plus `Check` (10 seats, 4 hotbar, every Mascot in exactly one slot). No services; tested by `Dev/MascotInventoryTest` (DevData `selftest`). |
 | Services/ParkService *(planned)* | Park upgrades, and the once-a-second Cash/s payout. |
 | Services/OfflineService *(planned)* | Pays capped offline earnings at load and sends `WelcomeBack`. |
@@ -192,7 +192,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/HighlightController | Biome banner at the line crossing; distance popup; catch and sold toasts; client `Landed` signal. |
 | Controllers/HudController | Power, Cash (and Cash/s), distance bar with biome markers, swing button. |
 | Controllers/ParkController *(planned)* | Draws seated Mascots and upgrade props on every plot; park upgrade buttons. |
-| Controllers/MascotPanelController *(planned)* | Hotbar and On Deck bar, plus the Mascots panel: Sell, Lock, Equip Best, Auto-Sell toggle. |
+| Controllers/MascotController | Client side of the Mascot actions (Sell, Lock, Move, Equip Best, Auto-Sell): asks the server, shows "Sold X +$N". |
+| Controllers/MascotPanelController *(planned)* | Hotbar and On Deck bar, plus the Mascots panel: Sell, Lock, Equip Best, Auto-Sell toggle (calls MascotController). |
 | Controllers/IndexController *(planned)* | The Index: world and biome tabs, 8 cards per biome. |
 | Controllers/ShopController *(planned, from BatShopController)* | Balls (with each tier's odds) and bats. |
 | Controllers/WelcomeBackController *(planned)* | Shows the offline payout; never covers SWING. |
@@ -311,9 +312,9 @@ rows don't exist yet.
 | C → S | `BuyBat` / `EquipBat` | Function | `batId` → `{ ok, err? }` |
 | C → S | `BuyBall` *(planned)* | Function | `ballId` → `{ ok, err? }` |
 | C → S | `BuyParkUpgrade` *(planned)* | Function | `upgradeId` → `{ ok, err? }` |
-| C → S | `SellMascot` / `LockMascot` *(planned)* | Function | `uid` (+ `locked`) → `{ ok, err? }` |
-| C → S | `MoveMascot` *(planned)* | Function | `uid, place, slot` (seat, hotbar, On Deck swap) → `{ ok, err? }` |
-| C → S | `EquipBest` / `SetAutoSell` *(planned)* | Function | (`on`) → `{ ok, err? }` |
+| C → S | `SellMascot` / `LockMascot` | Function | `uid` (+ `locked`) → `{ ok, err?, cash?, species? }`; selling a locked Mascot is refused |
+| C → S | `MoveMascot` | Function | `uid, place, slot` (`"seats"`, `"hotbar"` or `"onDeck"`; swaps if taken, which is also the On Deck swap) → `{ ok, err? }` |
+| C → S | `EquipBest` / `SetAutoSell` | Function | (`on`) → `{ ok, err? }` |
 | C → S | `Promote` *(planned)* | Function | → `{ ok, err? }` |
 | S → C | `Pitch` | Event | `Pitch` (see HookTypes) |
 | S → C | `HitResult` | Event | `{ hitId, powerGained, pitcherBonus, segments, distance, biomeIndex, catch? }`. `catch` = `HookTypes.Catch`: `{ uid, species, rarity, variant, size, cashPerSec, placedIn, slot?, isNewSpecies, sold? }` |

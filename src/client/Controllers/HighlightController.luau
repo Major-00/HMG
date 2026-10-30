@@ -288,6 +288,8 @@ local function rarityOf(id: string): any
 	return Mascots.Rarities[Mascots.RarityRank[id] or 1]
 end
 
+local playToast: () -> ()
+
 local function showCatch(hitId: number, catch: any)
 	if catchShown[hitId] then
 		return
@@ -328,7 +330,11 @@ local function showCatch(hitId: number, catch: any)
 	else
 		toastSold.Visible = false
 	end
+	playToast()
+end
 
+-- Shows whatever is in the toast labels, then fades it out after CATCH_TOAST_TIME.
+playToast = function()
 	-- Stop the previous toast's fade, or it would keep fading this one out.
 	for _, tween in toastFades do
 		tween:Cancel()
@@ -363,6 +369,19 @@ local function showCatch(hitId: number, catch: any)
 			end
 		end)
 	end)
+end
+
+-- A Mascot the player sold by tap: "Sold Gumdrop Frog +$300". Shares the catch toast.
+function HighlightController.ShowSold(speciesId: string, cash: number)
+	local species = Mascots.ById[speciesId]
+	if species == nil then
+		return
+	end
+	toastTitle.Text = `Sold {species.displayName}`
+	toastTitle.TextColor3 = Color3.fromRGB(255, 220, 90)
+	toastDetail.Text = `+${Format.number(cash)}`
+	toastSold.Visible = false
+	playToast()
 end
 
 local function forgetOld()

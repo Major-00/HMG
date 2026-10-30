@@ -1,5 +1,6 @@
 --!strict
--- Types: the player save shape. Bump DATA_VERSION and add a migration when it changes.
+-- Types: the player save shape. When it changes, bump Migrations.CURRENT_VERSION,
+-- add a migration step, and update server/Data/Template.
 
 export type PetEntry = {
 	id: string, -- key into Config/Pets
@@ -25,6 +26,13 @@ export type PlayerData = {
 	rebirths: number,
 	worldsUnlocked: number, -- 1 = World 1 only
 	currentWorld: number,
+
+	-- Player preferences (kept through rebirth)
+	settings: {
+		music: boolean,
+		sfx: boolean,
+		lowGraphics: boolean,
+	},
 
 	-- Lifetime stats (never reset)
 	lifetime: {

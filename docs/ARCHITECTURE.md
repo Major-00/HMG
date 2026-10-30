@@ -21,8 +21,9 @@ HMG/
    ├─ server/   → ServerScriptService.Server             (Script)
    │  ├─ init.server.luau    loads Services: Init() all, then Start() all
    │  ├─ Services/
+   │  ├─ Data/               save Template + Migrations
    │  ├─ Pitchers/           Pitcher implementations (PitchingMachine now)
-   │  └─ Packages/           vendored server-only libraries (ProfileStore)
+   │  └─ Packages/           vendored server-only libraries (ProfileStore 1.0.3)
    ├─ client/   → StarterPlayer.StarterPlayerScripts.Client (LocalScript)
    │  ├─ init.client.luau    loads Controllers: Init() all, then Start() all
    │  ├─ Controllers/
@@ -67,7 +68,10 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/ReplicationService | Send each player their own snapshot and changes. |
 | Services/LeaderstatsService | Mirror Wins and Rebirths into the player list. |
 | Pitchers/PitchingMachine | Default `Pitcher`: fixed cooldown and travel time. |
-| Packages/ProfileStore | Vendored library (added in the data step). |
+| Services/DevService | Studio-only test hook (`ServerStorage.DevData`); does nothing on live servers. |
+| Data/Template | Default save for new players; ProfileStore fills missing keys from it. |
+| Data/Migrations | Upgrades older saves one version at a time, on a copy first. |
+| Packages/ProfileStore | ProfileStore 1.0.3, commit `45c9847`, unmodified (Apache-2.0). |
 
 **Client: `src/client/`** (input and drawing only, no stat math)
 

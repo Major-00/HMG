@@ -239,4 +239,34 @@ function Formulas.mascotSellValue(mascot: any): number
 	return math.floor(Formulas.mascotCashPerSec(mascot) * Tuning.Catch.SELL_SECONDS)
 end
 
+-- INCOME ------------------------------------------------------------------------------------
+
+-- The park's Cash multiplier from its upgrades. 1 until the park upgrade step adds them.
+function Formulas.parkMultiplier(_data: any): number
+	return 1
+end
+
+-- Cash per second the player earns: seated Mascots only (hotbar and On Deck don't earn),
+-- times the park upgrades and the stadium tier's Cash multiplier. The server pays this; the
+-- client uses the same number to count the HUD up smoothly.
+function Formulas.cashRate(data: any): number
+	local seated = 0
+	for _, uid in data.seats do
+		local mascot = if uid then data.mascots[uid] else nil
+		if mascot then
+			seated += Formulas.mascotCashPerSec(mascot)
+		end
+	end
+	return seated * Formulas.parkMultiplier(data) * Formulas.stadiumTier(data).cashMultiplier
+end
+
+-- Seconds of offline time that pay out: time since the save was last written, never negative
+-- (a clock that went backwards pays nothing), capped at Tuning.Offline.CAP_SECONDS.
+function Formulas.offlineSeconds(lastOnline: number, now: number): number
+	if lastOnline <= 0 or now <= lastOnline then
+		return 0
+	end
+	return math.min(now - lastOnline, Tuning.Offline.CAP_SECONDS)
+end
+
 return Formulas

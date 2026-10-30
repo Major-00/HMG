@@ -45,8 +45,10 @@ covers it. Balls are never sold for Robux.
 
 **Offline earnings.** `lastOnline` is saved on every save and on leave. At load, the server
 pays Cash rate × time away, at full rate, capped at `Tuning.Offline` (3h). It's credited before
-the player sees anything. The Welcome Back screen only shows the amount and never covers the
-SWING button. A missing or future `lastOnline` pays 0.
+the player sees anything. The Welcome Back card only shows the amount (after at least 60s away),
+never covers the SWING button and ignores taps, so a tap on it still swings. A missing or future
+`lastOnline` pays 0. Live pay is per player from the moment the save loaded, so offline and live
+pay never overlap.
 
 **Stadium promotion** (the rebirth). Tiers: Sandlot Field → Minor League → Big Stadium →
 Space Dome. Each tier has two separate multipliers in `Config/Stadium`: Power gained per hit,
@@ -162,8 +164,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/LandingService | **On-land hook.** Runs the push handlers, then the catch phase (`SetCatcher`), then fires `Landed` with the final distance, biome and catch. |
 | Services/MascotService | Sets the catch phase: rolls species, variant and size on the server, updates the Index and lifetime count, places the catch with `MascotInventory`, checks the result before writing it, pays sales at full value. Handles the Sell, Lock, Move, Equip Best and Auto-Sell remotes (type-checked, 10 actions/s per player). |
 | Services/MascotInventory | Pure rules for seats, hotbar, On Deck, Auto-Sell, Lock, Sell, Move (swap) and Equip Best, plus `Check` (10 seats, 4 hotbar, every Mascot in exactly one slot). No services; tested by `Dev/MascotInventoryTest` (DevData `selftest`). |
-| Services/ParkService *(planned)* | Park upgrades, and the once-a-second Cash/s payout. |
-| Services/OfflineService *(planned)* | Pays capped offline earnings at load and sends `WelcomeBack`. |
+| Services/IncomeService | Pays `Formulas.cashRate` (seated Mascots × park × stadium tier) every second, and the capped offline payout at load; answers `GetWelcomeBack` once. DataService stamps `lastOnline` on every save (`profile.OnSave`). |
+| Services/ParkService *(planned)* | Park upgrades. |
 | Services/BallService *(planned)* | Buys ball tiers with Cash (in order, permanent for the run). |
 | Services/BatService | Buy and equip bats with Cash. |
 | Services/PromotionService *(stub)* | Stadium promotion: check the requirement, reset run progress, keep every Mascot, raise the tier. |
@@ -196,7 +198,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/MascotPanelController *(planned)* | Hotbar and On Deck bar, plus the Mascots panel: Sell, Lock, Equip Best, Auto-Sell toggle (calls MascotController). |
 | Controllers/IndexController *(planned)* | The Index: world and biome tabs, 8 cards per biome. |
 | Controllers/ShopController *(planned, from BatShopController)* | Balls (with each tier's odds) and bats. |
-| Controllers/WelcomeBackController *(planned)* | Shows the offline payout; never covers SWING. |
+| Controllers/WelcomeBackController | Shows the offline payout for 4s; never covers SWING and ignores taps. |
 | Controllers/PromotionController *(stub)* | Promotion panel: requirement, what resets, what's kept, what the new tier gives. |
 | PitcherVisuals/PitchingMachine | Machine model and throw animation. |
 
@@ -319,7 +321,7 @@ rows don't exist yet.
 | S → C | `Pitch` | Event | `Pitch` (see HookTypes) |
 | S → C | `HitResult` | Event | `{ hitId, powerGained, pitcherBonus, segments, distance, biomeIndex, catch? }`. `catch` = `HookTypes.Catch`: `{ uid, species, rarity, variant, size, cashPerSec, placedIn, slot?, isNewSpecies, sold? }` |
 | S → C | `Highlight` | Event | `Highlight` minus `player` |
-| S → C | `WelcomeBack` *(planned)* | Event | `{ seconds, cash }` |
+| C → S | `GetWelcomeBack` | Function | → `{ seconds, cash }` once after an offline payout (60s+ away), else nil |
 | S → C | `DataChanged` | Event | changed top-level keys only |
 
 Rules: the client never sends a number that becomes a stat. Every argument is
@@ -371,7 +373,7 @@ adds missing keys, so the wipe is explicit.
 | Rule ([CLAUDE.md](../CLAUDE.md)) | Where |
 |---|---|
 | Server-side stats | Only Services write the save. The client sends a pitch id and ids, never values. Catches are rolled with a server `Random`. |
-| Low-end mobile | Biomes built on the client, only near the camera; one ball part plus a cheap trail; part-built Mascot rigs, far parks hidden; Cash replicates as a rate, not every tick. |
+| Low-end mobile | Biomes built on the client, only near the camera; one ball part plus a cheap trail; part-built Mascot rigs, far parks hidden; Cash is paid and sent once a second, and the HUD counts up between payouts from the shared rate formula. |
 | Power, distance and tier never for Robux; balls Cash-only | No product touches Power, distance, stadium tier or balls. Robux items are a Luck Boost (luck only) and Auto-Swing (the tap path). |
 | Odds before any luck purchase | The odds screen shows every Mascot's % with and without the boost, from the same `Formulas.catchOdds` the server rolls with. |
 | Safe at home | No trading or stealing. Sales only through the player's tap, Auto-Sell or the On Deck rule, at full value, never locked Mascots; `MascotInventory` checks this on every change. Promotion keeps every Mascot. |

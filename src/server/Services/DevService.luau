@@ -12,6 +12,7 @@
 --   Mascot actions, same path as the remotes:
 --     "lock" (uid, locked?), "autosell" (on), "equipbest", "sell" (uid),
 --     "move" (uid, place, slot), "grant" (speciesId, variant?, size?) -> adds it like a catch
+--   DevData:Invoke("offline", userId, seconds) -> pays offline earnings as if away that long
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -26,6 +27,7 @@ local Tuning = require(ReplicatedStorage.Shared.Config.Tuning)
 local Template = require(script.Parent.Parent.Data.Template)
 local DataService = require(script.Parent.DataService)
 local LandingService = require(script.Parent.LandingService)
+local IncomeService = require(script.Parent.IncomeService)
 local MascotService = require(script.Parent.MascotService)
 
 local DevService = {}
@@ -220,6 +222,11 @@ function DevService.Start()
 			return MascotService.Move(player, key, value, extra)
 		elseif command == "grant" then
 			return MascotService.Grant(player, key, value, extra)
+		elseif command == "offline" then
+			-- Pretend the player was away `key` seconds, then pay offline earnings as on load.
+			local before = (DataService.Get(player) :: any).cash
+			local welcome = IncomeService.SimulateOffline(player, tonumber(key) or 0)
+			return { paid = (DataService.Get(player) :: any).cash - before, welcome = welcome }
 		end
 		return nil
 	end

@@ -24,6 +24,7 @@ Remotes.Functions = {
 	"MoveMascot", -- (uid: string, place: "seats" | "hotbar" | "onDeck", slot: number); swaps if taken
 	"EquipBest", -- () seats the top 10 earners
 	"SetAutoSell", -- (on: boolean) sells nothing by itself
+	"GetWelcomeBack", -- () -> { seconds, cash } once after offline earnings were paid, else nil
 }
 
 -- Server -> Client (RemoteEvent)

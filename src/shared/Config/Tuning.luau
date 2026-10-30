@@ -132,6 +132,16 @@ local Tuning = {
 		-- Sell value = this many seconds of the Mascot's earnings (variant and size included).
 		SELL_SECONDS = 30,
 	},
+
+	-- Seated Mascots earn Cash every second (Formulas.cashRate), online and offline.
+	Income = {
+		PAY_EVERY = 1, -- seconds between payouts while playing
+	},
+	Offline = {
+		CAP_SECONDS = 3 * 60 * 60, -- offline earnings stop after 3 hours away
+		MIN_WELCOME_SECONDS = 60, -- the Welcome Back screen only shows after at least this long away
+		WELCOME_TIME = 4, -- seconds the Welcome Back card stays up (it never takes taps)
+	},
 }
 
 return Tuning

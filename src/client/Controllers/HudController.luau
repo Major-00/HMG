@@ -1,6 +1,7 @@
 --!strict
 -- HudController: placeholder HUD (the UI pass comes later).
---   Top-left: Power and Cash. Top-center: distance bar with one equal-width section per biome,
+--   Top-left: Power, Cash (counting up smoothly between the server's payouts) and Cash/s.
+--   Top-center: distance bar with one equal-width section per biome,
 --   filled to the last hit. Bottom-right: the big SWING button. A short "+Power" popup per hit.
 -- Display only: every value comes from the server (StateController and HitResult).
 --   HudController.SwingPressed -> Signal fired when the SWING button is pressed
@@ -8,6 +9,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -27,7 +29,14 @@ HudController.SwingPressed = Signal.new()
 
 local powerLabel: TextLabel
 local cashLabel: TextLabel
+local rateLabel: TextLabel
 local barFill: Frame
+-- Cash counts up smoothly between the server's once-a-second payouts: the last Cash the server
+-- sent, when it arrived, and the earning rate (Formulas.cashRate, the same number the server pays).
+local cashBase = 0
+local cashBaseAt = 0
+local cashRate = 0
+local cashShown = 0 -- what the label shows; only goes down when Cash is spent
 local bestMarker: Frame
 local hitLabel: TextLabel
 local popup: TextLabel
@@ -72,7 +81,7 @@ local function build(): ScreenGui
 	stats.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
 	stats.BackgroundTransparency = 0.35
 	stats.Position = UDim2.fromOffset(12, 12)
-	stats.Size = UDim2.fromOffset(190, 78)
+	stats.Size = UDim2.fromOffset(190, 100)
 	Instance.new("UICorner").Parent = stats
 	stats.Parent = gui
 	powerLabel = label({
@@ -90,6 +99,15 @@ local function build(): ScreenGui
 		TextColor3 = Color3.fromRGB(255, 220, 90),
 		Position = UDim2.fromOffset(10, 40),
 		Size = UDim2.new(1, -20, 0, 30),
+		Parent = stats,
+	})
+	rateLabel = label({
+		Name = "CashRate",
+		Text = "",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Color3.fromRGB(255, 235, 160),
+		Position = UDim2.fromOffset(10, 72),
+		Size = UDim2.new(1, -20, 0, 20),
 		Parent = stats,
 	})
 
@@ -201,11 +219,42 @@ local function refresh()
 		return
 	end
 	powerLabel.Text = `Power: {Format.number(data.power)}`
-	cashLabel.Text = `Cash: ${Format.number(data.cash)}`
 	if data.lifetime.bestDistance > 0 then
 		bestMarker.Visible = true
 		bestMarker.Position = UDim2.fromScale(barPosition(data.lifetime.bestDistance), 0)
 	end
+end
+
+-- A new Cash value from the server.
+local function refreshCash()
+	local data = StateController.Get()
+	if data == nil then
+		return
+	end
+	if data.cash < cashBase then
+		cashShown = 0 -- Cash really went down (a purchase): let the display drop with it
+	end
+	cashBase = data.cash
+	cashBaseAt = os.clock()
+end
+
+-- The earning rate changes when seats, Mascots or the stadium tier change.
+local function refreshRate()
+	local data = StateController.Get()
+	if data == nil then
+		return
+	end
+	cashRate = Formulas.cashRate(data)
+	rateLabel.Text = if cashRate > 0 then `+${Format.number(cashRate)}/s` else "Seat Mascots to earn"
+end
+
+-- Every frame: the last server Cash plus what's been earned since, for at most a little over
+-- one payout (so a late or stopped update never runs the number away). Never counts backwards
+-- when a payout arrives a little late; it only drops for a real spend.
+local function tickCash()
+	local since = math.min(os.clock() - cashBaseAt, Tuning.Income.PAY_EVERY * 1.5)
+	cashShown = math.max(cashShown, cashBase + cashRate * since)
+	cashLabel.Text = `Cash: ${Format.number(cashShown)}`
 end
 
 local popupTween: Tween? = nil
@@ -258,13 +307,23 @@ function HudController.Init()
 end
 
 function HudController.Start()
-	StateController.Ready:Connect(refresh)
+	local function refreshAll()
+		refresh()
+		refreshCash()
+		refreshRate()
+	end
+	StateController.Ready:Connect(refreshAll)
 	StateController.Changed:Connect(function(key: string)
-		if key == "power" or key == "cash" or key == "lifetime" then
+		if key == "power" or key == "lifetime" then
 			refresh()
+		elseif key == "cash" then
+			refreshCash()
+		elseif key == "seats" or key == "mascots" or key == "stadiumTier" or key == "park" then
+			refreshRate()
 		end
 	end)
-	refresh()
+	refreshAll()
+	RunService.RenderStepped:Connect(tickCash)
 	Remotes.Event("HitResult").OnClientEvent:Connect(onHit)
 end
 

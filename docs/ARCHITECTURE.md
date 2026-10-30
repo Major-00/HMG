@@ -78,7 +78,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Module | Job |
 |---|---|
 | Controllers/StateController | Latest snapshot from the server; others read it. |
-| Controllers/InputController | Tap anywhere (not on menus) or the swing button fires `Swing` with the pending `pitchId`. |
+| Controllers/InputController | Tap anywhere (not on menus) or the swing button fires `Swing(pitchId, tapTime)` once per pitch; predicts the timing result; swings the bat. |
 | Controllers/PitcherController | Shows the active pitcher and plays each `Pitch` using that pitcher's visual. |
 | Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
 | Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. |
@@ -131,9 +131,13 @@ PitchService.QueueNext: next pitch after the ball-cam (Formulas.ballCamTime), so
   numbers the client camera uses. Taps while the camera is away are ignored.
 - **Pitch cadence is the tap limit.** One pending pitch per player means no extra
   rate limiter is needed, and spam does nothing. A faster pitcher pet is a natural upgrade later.
-- **Contact is instant:** any tap while a pitch is pending is a hit, wherever the ball is
-  drawn, so latency on phones never causes a miss. `Tuning.HIT_WINDOW` is reserved for
-  a timing mechanic later.
+- **Timing matters, one swing per pitch:** the first tap on a pitch is judged by
+  `Formulas.judgeSwing` against the moment the ball reaches the plate (`Tuning.Timing`):
+  Perfect (±0.05s, +25% distance), Good (-0.2s to +0.15s), or a whiff ("Too early!" /
+  "Too late!") that uses up the pitch. The client sends its tap time; the server trusts it only
+  within the player's ping + `LAG_SLACK`, so phones on slow connections aren't punished and
+  nobody can claim an old time. The client predicts with the same judge for instant feedback;
+  the server's `HitResult` / `Whiff` is final.
 - **First swing within 10s:** the first pitch is sent the moment the save loads, and the
   machine is visible from spawn.
 
@@ -170,14 +174,15 @@ The server creates everything under `ReplicatedStorage.Remotes` at startup.
 
 | Direction | Name | Type | Payload |
 |---|---|---|---|
-| C → S | `Swing` | Event | `pitchId` |
+| C → S | `Swing` | Event | `pitchId, tapTime` (client's server-clock time of the tap) |
 | C → S | `GetData` | Function | → full snapshot of the caller's own save |
 | C → S | `BuyBat` / `EquipBat` | Function | `batId` → `{ ok, err? }` |
 | C → S | `HatchEgg` | Function | `eggId, count` → `{ ok, err?, pets }` |
 | C → S | `EquipPet` / `UnequipPet` | Function | `petUid` → `{ ok, err? }` |
 | C → S | `Rebirth` | Function | → `{ ok, err? }` |
 | S → C | `Pitch` | Event | `Pitch` (see HookTypes) |
-| S → C | `HitResult` | Event | `{ hitId, powerGained, segments, distance, biomeIndex, winsGained }` |
+| S → C | `HitResult` | Event | `{ hitId, quality, powerGained, segments, distance, biomeIndex, winsGained }` |
+| S → C | `Whiff` | Event | `{ pitchId, quality }` ("early" or "late") |
 | S → C | `Highlight` | Event | `Highlight` minus `player` |
 | S → C | `DataChanged` | Event | changed top-level keys only |
 

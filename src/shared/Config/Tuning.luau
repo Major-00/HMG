@@ -15,7 +15,17 @@ local Tuning = {
 		MACHINE_TRAVEL_TIME = 0.7, -- seconds from release to the plate
 		MACHINE_COOLDOWN = 0.5, -- seconds after a hit (or a miss) before the next release
 		FIRST_PITCH_DELAY = 0.5, -- seconds after the character spawns before the first pitch
-		LATE_WINDOW = 1.0, -- seconds after the ball reaches the plate that a tap still hits
+	},
+
+	-- Swing timing, in seconds relative to the ball reaching the plate (negative = early).
+	-- One swing per pitch: a tap outside the Good window is a whiff and uses up the pitch.
+	Timing = {
+		GOOD_EARLY = 0.2, -- earliest hit: ball about 5.7 studs before the plate
+		GOOD_LATE = 0.15, -- latest hit: ball about 4.3 studs past the plate
+		PERFECT = 0.05, -- within this of the plate (either side) is a Perfect
+		PERFECT_DISTANCE_BONUS = 1.25, -- a Perfect hit flies (and pays) 25% further
+		LAG_SLACK = 0.1, -- extra seconds a tap's reported time may be older than the player's ping
+		MISS_FLY_TIME = 0.6, -- a missed ball keeps flying past the plate this long before it vanishes
 	},
 
 	Power = {
@@ -97,7 +107,9 @@ local Tuning = {
 	},
 
 	Swing = {
-		ANIMATION_TIME = 0.15, -- seconds for the bat swing
+		TO_CONTACT = 0.07, -- seconds from the ready pose to the strike point
+		FOLLOW_THROUGH = 0.09, -- seconds sweeping across after contact
+		RECOVER = 0.22, -- seconds back to the ready pose
 	},
 }
 

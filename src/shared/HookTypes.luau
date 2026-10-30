@@ -9,7 +9,7 @@ export type Pitch = {
 	pitcherId: string, -- which pitcher threw it ("pitching_machine" for now)
 	releaseAt: number, -- workspace:GetServerTimeNow() when the ball leaves the pitcher
 	arriveAt: number, -- when it reaches the plate
-	expiresAt: number, -- last moment a tap still hits; after this it's a miss
+	expiresAt: number, -- last moment a tap still hits (arriveAt + Timing.GOOD_LATE)
 }
 
 -- PITCHER SLOT. Each player has exactly one active pitcher.
@@ -23,6 +23,9 @@ export type Pitcher = {
 	-- Optional: extra multiplier on Power gained from hitting this pitcher's pitch (default 1).
 	powerBonus: ((player: Player) -> number)?,
 }
+
+-- How a swing was timed. "perfect" and "good" are hits; "early" and "late" are whiffs.
+export type SwingQuality = "perfect" | "good" | "early" | "late"
 
 -- One leg of the ball's journey. The hit is the first leg; on-land handlers may add more.
 export type FlightSegment = {

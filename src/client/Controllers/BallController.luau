@@ -136,6 +136,13 @@ local function acquire(): Ball?
 end
 
 function BallController.ShowPitch(pitch: HookTypes.Pitch, from: Vector3, to: Vector3)
+	-- Only one pitch is ever in play: clear any leftover ball that isn't waiting for a hit result.
+	for id, entry in pitches do
+		if entry.contactUntil == nil then
+			pitches[id] = nil
+			release(entry.ball)
+		end
+	end
 	local ball = acquire()
 	if ball == nil then
 		return
@@ -279,6 +286,17 @@ checkTouchdowns = function(flight: Flight, t: number)
 	end
 end
 
+-- The server judged the swing a whiff. If this client predicted a hit and is holding the
+-- ball at the plate, let it go.
+local function onWhiff(info: any)
+	local id = type(info) == "table" and info.pitchId
+	local entry = if type(id) == "number" then pitches[id] else nil
+	if entry and entry.contactUntil then
+		pitches[id] = nil
+		release(entry.ball)
+	end
+end
+
 local function onHitResult(result: any)
 	local entry = pitches[result.hitId]
 	pitches[result.hitId] = nil
@@ -296,7 +314,7 @@ local function step()
 				pitches[id] = nil
 				release(entry.ball)
 			end
-		elseif serverNow > entry.pitch.expiresAt then
+		elseif serverNow > entry.pitch.arriveAt + Tuning.Timing.MISS_FLY_TIME then
 			pitches[id] = nil -- missed, gone
 			release(entry.ball)
 		else
@@ -341,6 +359,7 @@ end
 
 function BallController.Start()
 	Remotes.Event("HitResult").OnClientEvent:Connect(onHitResult)
+	Remotes.Event("Whiff").OnClientEvent:Connect(onWhiff)
 	-- Just before the camera, so the ball-cam always reads this frame's ball position.
 	RunService:BindToRenderStep("BallStep", Enum.RenderPriority.Camera.Value - 1, step)
 end

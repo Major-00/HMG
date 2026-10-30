@@ -13,10 +13,25 @@ function Formulas.powerGain(multiplier: number): number
 	return Tuning.Power.PER_HIT * multiplier
 end
 
--- Hit distance in whole studs for a player's total Power.
-function Formulas.distance(power: number): number
+-- Hit distance in whole studs for a player's total Power. A Perfect swing adds the bonus.
+function Formulas.distance(power: number, perfect: boolean?): number
 	local d = Tuning.Distance
-	return math.floor(d.BASE + d.PER_POWER * math.max(power, 0) ^ d.EXPONENT)
+	local base = d.BASE + d.PER_POWER * math.max(power, 0) ^ d.EXPONENT
+	return math.floor(if perfect then base * Tuning.Timing.PERFECT_DISTANCE_BONUS else base)
+end
+
+-- Judges a swing from `offset` = tap time minus the moment the ball reaches the plate.
+-- Shared so the client's prediction and the server's decision use the same windows.
+function Formulas.judgeSwing(offset: number): "perfect" | "good" | "early" | "late"
+	local t = Tuning.Timing
+	if offset < -t.GOOD_EARLY then
+		return "early"
+	elseif offset > t.GOOD_LATE then
+		return "late"
+	elseif math.abs(offset) <= t.PERFECT then
+		return "perfect"
+	end
+	return "good"
 end
 
 -- Wins paid for a hit that travelled `distance` studs.

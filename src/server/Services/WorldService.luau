@@ -9,6 +9,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BatPose = require(ReplicatedStorage.Shared.BatPose)
 local Tuning = require(ReplicatedStorage.Shared.Config.Tuning)
 
 local FOLDER_NAME = "BattingAreas"
@@ -132,29 +133,47 @@ local function releaseLane(player: Player)
 	end
 end
 
--- Placeholder bat in the right hand. Cosmetic; the client swings it locally.
+-- Placeholder bat in the right hand: a handle plus a thicker barrel, held up over the right
+-- shoulder (BatPose.READY) so it's visible from the camera behind the batter.
+-- Cosmetic; the client swings it locally.
+local function batPart(name: string, length: number, width: number, color: Color3): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Shape = Enum.PartType.Cylinder
+	p.Size = Vector3.new(length, width, width)
+	p.Color = color
+	p.Material = Enum.Material.Wood
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.CastShadow = false
+	return p
+end
+
 local function giveBat(character: Model)
 	local hand = character:WaitForChild("RightHand", 5) or character:FindFirstChild("Right Arm")
 	if hand == nil or not hand:IsA("BasePart") then
 		return
 	end
-	local bat = Instance.new("Part")
-	bat.Name = BAT_NAME
-	bat.Size = Vector3.new(0.35, 3, 0.35)
-	bat.Color = Color3.fromRGB(150, 105, 60)
-	bat.Material = Enum.Material.SmoothPlastic
-	bat.CanCollide = false
-	bat.CanQuery = false
-	bat.CanTouch = false
-	bat.Massless = true
-	bat.CastShadow = false
+	local handle = batPart(BAT_NAME, BatPose.HANDLE_LENGTH, BatPose.HANDLE_WIDTH, Color3.fromRGB(120, 80, 45))
+	local barrel =
+		batPart("BatBarrel", BatPose.BARREL_LENGTH, BatPose.BARREL_WIDTH, Color3.fromRGB(200, 155, 95))
+
+	local join = Instance.new("Weld")
+	join.Part0 = handle
+	join.Part1 = barrel
+	join.C0 = CFrame.new((BatPose.HANDLE_LENGTH + BatPose.BARREL_LENGTH) / 2 - 0.1, 0, 0)
+	join.Parent = barrel
+
 	local weld = Instance.new("Weld")
 	weld.Name = "BatGrip"
 	weld.Part0 = hand
-	weld.Part1 = bat
-	weld.C0 = CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(-60), 0, 0) * CFrame.new(0, 1.4, 0)
-	weld.Parent = bat
-	bat.Parent = character
+	weld.Part1 = handle
+	weld.C0 = BatPose.grip(BatPose.READY, hand.Name == "Right Arm")
+	weld.Parent = handle
+	handle.Parent = character
+	barrel.Parent = character
 end
 
 local function onCharacterAdded(player: Player, character: Model)

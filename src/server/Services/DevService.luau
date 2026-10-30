@@ -8,6 +8,7 @@
 --   DevData:Invoke("metrics", userId)          -> timings since this server saw the player join
 --   DevData:Invoke("simcatch", userId, n, distance) -> n catch rolls at `distance` with the
 --     player's world and best ball, compared with Formulas.catchOdds (changes nothing)
+--   DevData:Invoke("selftest", userId, ops?) -> MascotInventory rule tests (changes nothing)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -199,6 +200,9 @@ function DevService.Start()
 		elseif command == "simcatch" then
 			local n = math.clamp(math.floor(tonumber(key) or 100000), 1, 1000000)
 			return simCatch(player, n, tonumber(value) or 0)
+		elseif command == "selftest" then
+			local MascotInventoryTest = require(script.Parent.Parent.Dev.MascotInventoryTest) :: any
+			return MascotInventoryTest.Run(tonumber(key))
 		end
 		return nil
 	end

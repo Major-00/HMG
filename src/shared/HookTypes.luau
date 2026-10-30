@@ -64,7 +64,7 @@ export type Catch = {
 	variant: string,
 	size: string,
 	cashPerSec: number, -- before park upgrades and the stadium tier
-	placedIn: "seat" | "hotbar" | "sold", -- "sold": the roster was full and this catch was the weaker
+	placedIn: "seat" | "hotbar" | "onDeck" | "sold", -- "sold": no room and this catch was the weaker
 	slot: number?, -- seat or hotbar index
 	isNewSpecies: boolean, -- first time this species was caught (its Index card just unlocked)
 	sold: SoldMascot?, -- whatever was sold to make room (the catch itself when placedIn = "sold")

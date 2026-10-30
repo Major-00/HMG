@@ -315,6 +315,8 @@ local function showCatch(hitId: number, catch: any)
 		table.insert(parts, `Seat {catch.slot}`)
 	elseif catch.placedIn == "hotbar" then
 		table.insert(parts, `Hotbar {catch.slot}`)
+	elseif catch.placedIn == "onDeck" then
+		table.insert(parts, "On Deck")
 	end
 	toastDetail.Text = table.concat(parts, "  ·  ")
 

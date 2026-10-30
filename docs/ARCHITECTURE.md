@@ -206,14 +206,16 @@ number along one straight track, so the server never needs the biome geometry.
 | Remotes | Every remote by name (the client↔server contract). |
 | Types | `PlayerData` save type. |
 | HookTypes | Hook contracts: `Pitcher`, `Pitch`, `LandingHandler`, `Highlight`, `BiomeChallenge`, `BiomeConfig`. |
-| Formulas | Pure math: Power multiplier, distance from Power, ball-cam and reveal time, record milestones; (planned) catch odds, Mascot Cash/s and sell value, Cash rate, offline pay. |
+| Formulas | Pure math: Power multiplier, distance from Power, ball-cam time, record milestones, Luck, catch odds (`catchOdds`) and rolls, Mascot Cash/s and sell value; (planned) reveal time, Cash rate, offline pay. |
 | Format | Number display (1.2K, 3.4M). |
 | Signal | Small server/client event utility used by the hooks. |
 | BatPose | Bat grip poses shared by server and client. |
-| Config/Tuning | **Every tunable number** (pitch timing, Power, distance, biome starts, lanes, streaming, ball-cam, highlights, swing; planned: catch, reveal, offline, sell). |
-| Config/Biomes | Biome visuals per world. |
+| Config/Tuning | **Every tunable number** (pitch timing, Power, distance, biome starts, lanes, streaming, ball-cam, highlights, swing, catch: Luck, variants, sizes, Cash/s, sell value; planned: reveal, offline). |
+| Config/Biomes | Biome visuals, keyed by world (`Biomes[1]` = World 1). |
+| Config/Mascots | Rarities, and species keyed by world then biome id: 6 per biome at launch (one per rarity), 8 Index slots. |
+| Config/Balls | Ball tiers in unlock order with base rarity weights (only the basic ball so far). |
 | Config/Stadium | The 4 stadium tiers with their Power and Cash multipliers (tiers 2–4 tuned in the promotion step). |
-| Config/Bats, Mascots, Balls, Park *(Mascots, Balls, Park planned)* | Catalog tables (ids, names, prices, multipliers, odds). |
+| Config/Bats, Park *(Park planned)* | Catalog tables (ids, names, prices, multipliers). |
 
 ## 5. The hit flow
 

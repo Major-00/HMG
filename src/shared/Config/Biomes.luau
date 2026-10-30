@@ -1,5 +1,7 @@
 --!strict
--- Biomes: World 1 biomes in flight order. WorldController builds each strip from this.
+-- Biomes: each world's biomes in flight order, keyed by world (Biomes[1] = World 1).
+-- Stadium tier N plays World N; only World 1 exists so far.
+-- WorldController builds each strip from this.
 -- landmark = model name under ReplicatedStorage.Landmarks (assets/Landmarks/).
 -- challenge = per-biome challenge slot, empty in the MVP.
 -- visual = ground, side band, props and lighting. Placeholder looks; no assets.
@@ -58,7 +60,7 @@ local function pole(
 	}
 end
 
-local Biomes: { HookTypes.BiomeConfig } = {
+local World1: { HookTypes.BiomeConfig } = {
 	{
 		id = "sandlot",
 		displayName = "Sandlot",
@@ -256,5 +258,7 @@ local Biomes: { HookTypes.BiomeConfig } = {
 		},
 	},
 }
+
+local Biomes: { { HookTypes.BiomeConfig } } = { World1 }
 
 return Biomes

@@ -16,7 +16,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = Shared:WaitForChild("Config")
-local Biomes = require(Config:WaitForChild("Biomes"))
+local Biomes = require(Config:WaitForChild("Biomes"))[1] -- World 1 (the world follows stadiumTier from the World 2 step)
 local Format = require(Shared:WaitForChild("Format"))
 local Formulas = require(Shared:WaitForChild("Formulas"))
 local Remotes = require(Shared:WaitForChild("Remotes"))

@@ -96,6 +96,42 @@ local Tuning = {
 		FOLLOW_THROUGH = 0.09, -- seconds sweeping across after contact
 		RECOVER = 0.22, -- seconds back to the ready pose
 	},
+
+	-- The Mascot caught on every landing. One shared function (Formulas.catchOdds) turns these
+	-- into each species' chance, for both the server roll and every odds screen.
+	Catch = {
+		-- Luck climbs with landing distance:
+		--   luck = min(MAX_LUCK, 1 + PER_DOUBLING * log2(1 + distance / BASE_STUDS)) x boost
+		-- About 1.25 at 100 studs, 1.65 at 500, 2.7 at 12K.
+		LUCK = {
+			BASE_STUDS = 100,
+			PER_DOUBLING = 0.25,
+			MAX_LUCK = 4,
+		},
+		-- Each rarity's ball weight is multiplied by luck ^ ((rank - 1) * LUCK_POWER), where rank is
+		-- its position in Config/Mascots Rarities (Common = 1). Common never changes; Mythic gains most.
+		LUCK_POWER = 0.5,
+
+		-- Rolled separately from the species and from each other; both multiply earnings and
+		-- sell value. "none" / "normal" get whatever chance is left.
+		VARIANTS = {
+			{ id = "allStar", displayName = "All-Star", chance = 0.05, multiplier = 1.5 },
+			{ id = "goldGlove", displayName = "Gold Glove", chance = 0.01, multiplier = 3 },
+			{ id = "hallOfFame", displayName = "Hall of Fame", chance = 0.002, multiplier = 10 },
+		},
+		SIZES = {
+			{ id = "big", displayName = "Big", chance = 0.08, multiplier = 1.5 },
+			{ id = "giant", displayName = "Giant", chance = 0.01, multiplier = 3 },
+		},
+
+		-- Cash per second for a plain (no variant, normal size) Mascot:
+		--   RARITY_CASH[rarity] x BIOME_CASH[biomeIndex]
+		RARITY_CASH = { common = 1, uncommon = 3, rare = 10, epic = 35, legendary = 150, mythic = 1000 },
+		BIOME_CASH = { 1, 3, 10, 40, 150, 600 },
+
+		-- Sell value = this many seconds of the Mascot's earnings (variant and size included).
+		SELL_SECONDS = 30,
+	},
 }
 
 return Tuning

@@ -6,10 +6,18 @@
 --   DevData:Invoke("set", userId, key, value)  -> true if changed
 --   DevData:Invoke("reset", userId)            -> resets the save to new-player defaults
 --   DevData:Invoke("metrics", userId)          -> timings since this server saw the player join
+--   DevData:Invoke("simcatch", userId, n, distance) -> n catch rolls at `distance` with the
+--     player's world and best ball, compared with Formulas.catchOdds (changes nothing)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Mascots = require(ReplicatedStorage.Shared.Config.Mascots)
+local Tuning = require(ReplicatedStorage.Shared.Config.Tuning)
 
 local Template = require(script.Parent.Parent.Data.Template)
 local DataService = require(script.Parent.DataService)
@@ -48,6 +56,77 @@ local function track(player: Player)
 	if player.Character then
 		onCharacter()
 	end
+end
+
+local function percent(x: number): number
+	return math.floor(x * 10000 + 0.5) / 100
+end
+
+-- Rolls `n` catches the same way the server will, and compares the counts with the odds.
+local function simCatch(player: Player, n: number, distance: number): { [string]: any }?
+	local data = DataService.Get(player)
+	if data == nil then
+		return nil
+	end
+	local world = data.stadiumTier
+	local ball = Formulas.bestBall(data)
+	local biomeIndex = Formulas.biomeIndexAt(distance, world)
+	local odds = Formulas.catchOdds(world, ball.id, biomeIndex, distance)
+	local rng = Random.new()
+
+	local speciesCount: { [string]: number } = {}
+	local variantCount: { [string]: number } = {}
+	local sizeCount: { [string]: number } = {}
+	for _ = 1, n do
+		local id = Formulas.rollSpecies(odds, rng) :: string
+		speciesCount[id] = (speciesCount[id] or 0) + 1
+		local variant = Formulas.rollVariant(rng)
+		variantCount[variant] = (variantCount[variant] or 0) + 1
+		local size = Formulas.rollSize(rng)
+		sizeCount[size] = (sizeCount[size] or 0) + 1
+	end
+
+	-- Per rarity and per species: expected % vs rolled %, and the biggest gap.
+	local rarities = {}
+	local species = {}
+	local maxGap = 0
+	local expectedByRarity: { [string]: number } = {}
+	local rolledByRarity: { [string]: number } = {}
+	for _, entry in odds do
+		local rolled = (speciesCount[entry.species] or 0) / n
+		maxGap = math.max(maxGap, math.abs(rolled - entry.chance))
+		expectedByRarity[entry.rarity] = (expectedByRarity[entry.rarity] or 0) + entry.chance
+		rolledByRarity[entry.rarity] = (rolledByRarity[entry.rarity] or 0) + rolled
+		table.insert(species, `{entry.species} {percent(entry.chance)}% / {percent(rolled)}%`)
+	end
+	for _, rarity in Mascots.Rarities do
+		local expected = expectedByRarity[rarity.id]
+		if expected then
+			table.insert(rarities, `{rarity.id} {percent(expected)}% / {percent(rolledByRarity[rarity.id])}%`)
+		end
+	end
+	local function extras(list: { any }, default: string, counts: { [string]: number }): { string }
+		local out = { `{default} {percent((counts[default] or 0) / n)}%` }
+		for _, entry in list do
+			table.insert(out, `{entry.id} {percent(entry.chance)}% / {percent((counts[entry.id] or 0) / n)}%`)
+		end
+		return out
+	end
+
+	return {
+		world = world,
+		ball = ball.id,
+		distance = distance,
+		biome = Formulas.biomeNameAt(distance, world),
+		luck = math.floor(Formulas.luck(distance) * 1000) / 1000,
+		rolls = n,
+		rarities = rarities, -- "id expected% / rolled%"
+		species = species,
+		variants = extras(Tuning.Catch.VARIANTS, "none", variantCount),
+		sizes = extras(Tuning.Catch.SIZES, "normal", sizeCount),
+		maxGapPoints = percent(maxGap), -- largest species gap, in percentage points
+		rareShare = percent(1 - (expectedByRarity.common or 0) - (expectedByRarity.uncommon or 0)),
+	}
 end
 
 local function report(player: Player): { [string]: number? }?
@@ -117,6 +196,9 @@ function DevService.Start()
 			return true
 		elseif command == "metrics" then
 			return report(player)
+		elseif command == "simcatch" then
+			local n = math.clamp(math.floor(tonumber(key) or 100000), 1, 1000000)
+			return simCatch(player, n, tonumber(value) or 0)
 		end
 		return nil
 	end

@@ -6,11 +6,18 @@
 
 local Migrations = {}
 
-Migrations.CURRENT_VERSION = 1
+Migrations.CURRENT_VERSION = 2
 
 -- Steps[n] upgrades a version-n save to version n + 1, editing it in place.
 local Steps: { [number]: (data: any) -> () } = {
-	-- [1] = function(data) ... end, -- example: v1 -> v2
+	-- v1 -> v2: the HomeRun Mascots economy. There were no live players, only test saves,
+	-- so v1 saves are wiped and the Template refills them on load. ProfileStore's Reconcile
+	-- only adds missing keys and never removes old ones (wins, pets, rebirths ...), so the
+	-- wipe has to be explicit. Run bumps the version after this step.
+	[1] = function(data)
+		table.clear(data)
+		data.version = 1
+	end,
 }
 
 local function deepCopy(value: any): any

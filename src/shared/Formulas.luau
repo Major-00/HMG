@@ -6,16 +6,21 @@ local Config = script.Parent.Config
 local Tuning = require(Config.Tuning)
 local Biomes = require(Config.Biomes)
 local Bats = require(Config.Bats) :: any
+local Stadium = require(Config.Stadium)
 
 local Formulas = {}
 
--- A player's total Power multiplier from their save: bat x rebirth x pitcher bonus.
--- Shared so the client can predict a hit exactly (pets join the product in the pets step).
+-- The player's stadium tier entry (tier 1 if the save holds an unknown tier).
+function Formulas.stadiumTier(data: any): Stadium.StadiumTier
+	return Stadium[data.stadiumTier] or Stadium[1]
+end
+
+-- A player's total Power multiplier from their save: bat x stadium tier x pitcher bonus.
+-- Shared so the client can predict a hit exactly (boosts join the product when they exist).
 function Formulas.multiplier(data: any, pitcherBonus: number): number
 	local bat = Bats[data.bats.equipped]
 	local batMultiplier = if bat and bat.powerMultiplier then bat.powerMultiplier else 1
-	local rebirthMultiplier = 1 + data.rebirths * Tuning.Power.REBIRTH_BONUS
-	return batMultiplier * rebirthMultiplier * pitcherBonus
+	return batMultiplier * Formulas.stadiumTier(data).powerMultiplier * pitcherBonus
 end
 
 -- Power gained from one hit, given the player's total multiplier.
@@ -46,12 +51,6 @@ function Formulas.recordMilestone(previousBest: number, newBest: number): number
 		milestone = list[i] or milestone * ratio
 	end
 	return passed
-end
-
--- Wins paid for a hit that travelled `distance` studs.
-function Formulas.wins(distance: number): number
-	local w = Tuning.Wins
-	return math.max(w.MIN_PER_HIT, math.floor(distance / w.STUDS_PER_WIN))
 end
 
 -- Index (1-based, Config/Biomes order) of the biome at `distance`.

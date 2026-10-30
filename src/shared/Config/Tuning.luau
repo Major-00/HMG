@@ -20,8 +20,7 @@ local Tuning = {
 	},
 
 	Power = {
-		PER_HIT = 1, -- the "+1": Power gained per hit, before multipliers
-		REBIRTH_BONUS = 1, -- each rebirth adds +100% to the multiplier (used from the rebirth step)
+		PER_HIT = 1, -- the "+1": Power gained per hit, before multipliers (stadium tier: Config/Stadium)
 	},
 
 	-- distance = BASE + PER_POWER * power ^ EXPONENT, using total Power after the hit
@@ -29,12 +28,6 @@ local Tuning = {
 		BASE = 20,
 		PER_POWER = 4,
 		EXPONENT = 1,
-	},
-
-	-- Wins per hit = max(MIN_PER_HIT, floor(distance / STUDS_PER_WIN))
-	Wins = {
-		STUDS_PER_WIN = 10,
-		MIN_PER_HIT = 1,
 	},
 
 	-- Where each World 1 biome starts, in Config/Biomes order (Sandlot ... Canyon).

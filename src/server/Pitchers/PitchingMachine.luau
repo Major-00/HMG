@@ -1,6 +1,6 @@
 --!strict
 -- PitchingMachine: the default Pitcher (see HookTypes.Pitcher). Same timing for everyone, no Power bonus.
--- A pitcher pet is another module in this folder with the same shape and its own id.
+-- Another pitcher is another module in this folder with the same shape and its own id.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

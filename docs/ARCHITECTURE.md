@@ -166,7 +166,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/OfflineService *(planned)* | Pays capped offline earnings at load and sends `WelcomeBack`. |
 | Services/BallService *(planned)* | Buys ball tiers with Cash (in order, permanent for the run). |
 | Services/BatService | Buy and equip bats with Cash. |
-| Services/PromotionService *(planned, replaces RebirthService)* | Stadium promotion: check the requirement, reset run progress, keep every Mascot, raise the tier. |
+| Services/PromotionService *(stub)* | Stadium promotion: check the requirement, reset run progress, keep every Mascot, raise the tier. |
 | Services/HighlightService | **Highlight event.** Biomes reached for the first time this run, record milestones, and (planned) catches that earn a reveal or rare-catch clip. Fires a server Signal and the `Highlight` remote. |
 | Services/ChallengeService | **Per-biome challenge.** Reads each biome's `challenge` slot. Does nothing while all are nil. |
 | Services/WorldService | Builds the batting lanes, pitcher spots and (planned) ballpark plots at startup. |
@@ -196,7 +196,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/IndexController *(planned)* | The Index: world and biome tabs, 8 cards per biome. |
 | Controllers/ShopController *(planned, from BatShopController)* | Balls (with each tier's odds) and bats. |
 | Controllers/WelcomeBackController *(planned)* | Shows the offline payout; never covers SWING. |
-| Controllers/PromotionController *(planned, replaces RebirthController)* | Promotion panel: requirement, what resets, what's kept, what the new tier gives. |
+| Controllers/PromotionController *(stub)* | Promotion panel: requirement, what resets, what's kept, what the new tier gives. |
 | PitcherVisuals/PitchingMachine | Machine model and throw animation. |
 
 **Shared: `src/shared/`**
@@ -212,7 +212,8 @@ number along one straight track, so the server never needs the biome geometry.
 | BatPose | Bat grip poses shared by server and client. |
 | Config/Tuning | **Every tunable number** (pitch timing, Power, distance, biome starts, lanes, streaming, ball-cam, highlights, swing; planned: catch, reveal, offline, sell). |
 | Config/Biomes | Biome visuals per world. |
-| Config/Bats, Mascots, Balls, Park, Stadium *(Mascots, Balls, Park, Stadium planned; Stadium replaces Rebirth)* | Catalog tables (ids, names, prices, multipliers, odds). |
+| Config/Stadium | The 4 stadium tiers with their Power and Cash multipliers (tiers 2–4 tuned in the promotion step). |
+| Config/Bats, Mascots, Balls, Park *(Mascots, Balls, Park planned)* | Catalog tables (ids, names, prices, multipliers, odds). |
 
 ## 5. The hit flow
 
@@ -324,7 +325,7 @@ RemoteFunctions. Inventory actions never block or delay swinging.
 
 ## 8. Player save (`src/shared/Types.luau`)
 
-Save version 2 *(planned; the code is still version 1)*. There are no live players, so the
+Save version 2. There are no live players, so the
 v1 → v2 migration empties old test saves and refills them from the Template. ProfileStore only
 adds missing keys, so the wipe is explicit.
 

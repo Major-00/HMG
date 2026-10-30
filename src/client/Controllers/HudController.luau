@@ -1,7 +1,7 @@
 --!strict
 -- HudController: placeholder HUD (the UI pass comes later).
---   Top-left: Power and Wins. Top-center: distance bar with one equal-width section per biome,
---   filled to the last hit. Bottom-right: the big SWING button. A short "+Power +Wins" popup per hit.
+--   Top-left: Power and Cash. Top-center: distance bar with one equal-width section per biome,
+--   filled to the last hit. Bottom-right: the big SWING button. A short "+Power" popup per hit.
 -- Display only: every value comes from the server (StateController and HitResult).
 --   HudController.SwingPressed -> Signal fired when the SWING button is pressed
 --   HudController.Celebrate(hitId) -> "PERFECT!" (once per hit). Given on milestones, never for skill.
@@ -26,7 +26,7 @@ local HudController = {}
 HudController.SwingPressed = Signal.new()
 
 local powerLabel: TextLabel
-local winsLabel: TextLabel
+local cashLabel: TextLabel
 local barFill: Frame
 local bestMarker: Frame
 local hitLabel: TextLabel
@@ -83,9 +83,9 @@ local function build(): ScreenGui
 		Size = UDim2.new(1, -20, 0, 30),
 		Parent = stats,
 	})
-	winsLabel = label({
-		Name = "Wins",
-		Text = "Wins: ...",
+	cashLabel = label({
+		Name = "Cash",
+		Text = "Cash: ...",
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = Color3.fromRGB(255, 220, 90),
 		Position = UDim2.fromOffset(10, 40),
@@ -201,7 +201,7 @@ local function refresh()
 		return
 	end
 	powerLabel.Text = `Power: {Format.number(data.power)}`
-	winsLabel.Text = `Wins: {Format.number(data.wins)}`
+	cashLabel.Text = `Cash: ${Format.number(data.cash)}`
 	if data.lifetime.bestDistance > 0 then
 		bestMarker.Visible = true
 		bestMarker.Position = UDim2.fromScale(barPosition(data.lifetime.bestDistance), 0)
@@ -238,7 +238,7 @@ local function onHit(result: any)
 	hitLabel.Text =
 		`Last hit: {Format.number(result.distance)} studs - {Formulas.biomeNameAt(result.distance)}`
 
-	popup.Text = `+{Format.number(result.powerGained)} Power  +{Format.number(result.winsGained)} Wins`
+	popup.Text = `+{Format.number(result.powerGained)} Power`
 	popup.TextTransparency = 0
 	popup.TextStrokeTransparency = 0.4
 	if popupTween then
@@ -260,7 +260,7 @@ end
 function HudController.Start()
 	StateController.Ready:Connect(refresh)
 	StateController.Changed:Connect(function(key: string)
-		if key == "power" or key == "wins" or key == "lifetime" then
+		if key == "power" or key == "cash" or key == "lifetime" then
 			refresh()
 		end
 	end)

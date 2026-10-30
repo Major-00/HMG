@@ -2,13 +2,13 @@
 -- HighlightController: the big moments of a hit. Display only.
 --   * Highlight "biome" (from HighlightService, first time this run): when the ball crosses that
 --     biome's start line, "PERFECT!" plus a big banner with the biome name and the crossing
---     distance. Several new biomes in one hit queue one after another. A camera pet hooks in later.
+--     distance. Several new biomes in one hit queue one after another. The catch reveal hooks in later.
 --   * Highlight "record" (the best distance passed a milestone): "PERFECT!" as the ball passes it.
 --     Celebrations are given on milestones, never for tap skill (CLAUDE.md guardrail 5).
 --   * Every landing: the distance pops up at the landing spot, then `Landed` fires.
 --   HighlightController.Landed -> Signal ({ hitId, segmentIndex, position, distance, biomeName, isFinal })
 --     The client side of the on-land hook, at the moment the ball visibly lands. The server's
---     on-land hook (LandingService) already ran at hit time, because Wins depend on it.
+--     on-land hook (LandingService) already ran at hit time, because the catch depends on it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

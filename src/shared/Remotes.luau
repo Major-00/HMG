@@ -19,16 +19,12 @@ Remotes.Functions = {
 	"GetData", -- () -> full snapshot of the caller's own save, or nil if it never loaded
 	"BuyBat", -- (batId: string)
 	"EquipBat", -- (batId: string)
-	"HatchEgg", -- (eggId: string, count: number) -> pets rolled
-	"EquipPet", -- (petUid: string)
-	"UnequipPet", -- (petUid: string)
-	"Rebirth", -- ()
 }
 
 -- Server -> Client (RemoteEvent)
 Remotes.ServerEvents = {
 	"Pitch", -- HookTypes.Pitch
-	"HitResult", -- { hitId, powerGained, pitcherBonus, segments: {FlightSegment}, distance, biomeIndex, winsGained }
+	"HitResult", -- { hitId, powerGained, pitcherBonus, segments: {FlightSegment}, distance, biomeIndex }
 	"Highlight", -- HookTypes.Highlight without the player field
 	"DataChanged", -- { [topLevelKey]: newValue } for keys changed since the last frame
 }

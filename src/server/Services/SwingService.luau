@@ -1,7 +1,8 @@
 --!strict
 -- SwingService: handles Swing(pitchId). Any tap on the pitch in play is a hit (CLAUDE.md):
--- +Power (x multiplier), then distance from total Power, the on-land hook, Wins from the final
--- distance, and a HitResult. The client has already drawn the hit; this confirms the numbers.
+-- +Power (x multiplier), then distance from total Power, the on-land hook, and a HitResult.
+-- Hits don't pay Cash; seated Mascots do. The client has already drawn the hit; this confirms
+-- the numbers.
 -- The client sends only the pitch id; every number is decided here, from stats only.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -45,7 +46,6 @@ local function onSwing(player: Player, pitchId: unknown)
 		source = "hit",
 	})
 	local distance = landing.landedAt
-	local wins = Formulas.wins(distance)
 
 	-- Hold the next pitch until the ball-cam is back, so the ball reaches the plate just after.
 	-- The client's camera started at the tap, before this swing reached the server, so it is
@@ -59,12 +59,8 @@ local function onSwing(player: Player, pitchId: unknown)
 	local previousHighest = data.highestBiome
 	local previousBest = data.lifetime.bestDistance
 
-	DataService.Update(player, "wins", function(current)
-		return current + wins
-	end)
 	DataService.Update(player, "lifetime", function(lifetime)
 		lifetime.swings += 1
-		lifetime.winsEarned += wins
 		lifetime.bestDistance = math.max(lifetime.bestDistance, distance)
 		return lifetime
 	end)
@@ -81,7 +77,6 @@ local function onSwing(player: Player, pitchId: unknown)
 		segments = landing.segments,
 		distance = distance,
 		biomeIndex = landing.biomeIndex,
-		winsGained = wins,
 	})
 	HighlightService.Evaluate(player, pitch.pitchId, distance, previousHighest, previousBest)
 end

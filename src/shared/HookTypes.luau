@@ -1,6 +1,6 @@
 --!strict
 -- HookTypes: contracts for the swappable gameplay hooks.
--- Types only. Pitcher pets, catcher pets, camera pets and biome challenges plug in here later.
+-- Types only. New pitchers, the Mascot catch, rare-catch clips and biome challenges plug in here.
 -- Distances are in studs along the flight track, measured from home plate.
 
 -- One pitch, decided by the server and sent to the client to draw.
@@ -13,7 +13,7 @@ export type Pitch = {
 }
 
 -- PITCHER SLOT. Each player has exactly one active pitcher.
--- The pitching machine is the first implementation; a pitcher pet is another.
+-- The pitching machine is the first implementation; other pitchers come later.
 export type Pitcher = {
 	id: string,
 	-- Seconds from the end of one hit to the next pitch's release. Faster pitchers = more taps per second.
@@ -28,7 +28,7 @@ export type Pitcher = {
 export type FlightSegment = {
 	from: number,
 	to: number,
-	source: string, -- "hit", later e.g. "catcher_pet"
+	source: string, -- "hit", later e.g. "bounce"
 }
 
 -- Passed through the on-land handlers after the ball first lands.
@@ -42,8 +42,8 @@ export type LandingContext = {
 	position: Vector3, -- world position where the ball lands, in the player's lane
 }
 
--- ON-LAND HOOK. Runs on the server, in registration order, before Wins are paid.
--- Return a FlightSegment to push the ball further (e.g. a catcher pet), or nil to do nothing.
+-- ON-LAND HOOK. Runs on the server, in registration order, before the Mascot catch (which uses
+-- the final distance). Return a FlightSegment to push the ball further (e.g. a bounce), or nil.
 -- Handlers must not yield. LandingService.Landed fires after all handlers with the final context.
 export type LandingHandler = (ctx: LandingContext) -> FlightSegment?
 

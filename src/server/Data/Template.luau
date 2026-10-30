@@ -7,41 +7,56 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local Template: Types.PlayerData = {
-	version = 1,
+	version = 2,
 
-	-- Reset on rebirth
+	-- Run progress: reset on stadium promotion
 	power = 0,
-	wins = 0,
+	cash = 0,
 	bats = {
 		owned = { starter = true },
 		equipped = "starter",
 	},
+	balls = {
+		owned = { basic = true },
+	},
+	park = {
+		bleachers = 0,
+		concessions = 0,
+		scoreboard = 0,
+		lights = 0,
+		jumbotron = 0,
+	},
 	highestBiome = 1,
 
-	-- Kept through rebirth
-	pets = {},
-	nextPetUid = 1,
+	-- Kept forever (Safe at home)
+	mascots = {},
+	nextMascotUid = 1,
+	seats = { false, false, false, false, false, false, false, false, false, false },
+	hotbar = { false, false, false, false },
+	onDeck = false,
+	autoSell = true,
+	index = {},
+	stadiumTier = 1,
 	pitcher = "pitching_machine",
-	rebirths = 0,
-	worldsUnlocked = 1,
-	currentWorld = 1,
 
 	settings = {
 		music = true,
 		sfx = true,
 		lowGraphics = false,
+		tipsSeen = {},
 	},
 
 	-- Lifetime stats (never reset)
 	lifetime = {
 		swings = 0,
-		winsEarned = 0,
+		cashEarned = 0,
+		mascotsCaught = 0,
 		bestDistance = 0,
-		eggsHatched = 0,
 	},
 
 	firstJoin = 0,
 	lastJoin = 0,
+	lastOnline = 0,
 }
 
 return Template

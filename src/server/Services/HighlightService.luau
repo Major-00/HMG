@@ -1,10 +1,10 @@
 --!strict
 -- HighlightService: the highlight event. Celebrations are given, never earned by skill (CLAUDE.md).
 -- After a hit is final it fires `Fired` on the server and the `Highlight` remote to that player for:
---   "biome"  - each biome reached for the first time this run (above `highestBiome`; rebirth resets it)
+--   "biome"  - each biome reached for the first time this run (above `highestBiome`; promotion resets it)
 --   "record" - when the hit pushes the lifetime best past a milestone (Tuning.Highlight.RECORD_MILESTONES);
 --              `distance` is that milestone. Not every new best: early on that's every hit.
--- A camera pet listens to `Fired` later.
+-- The catch reveal and rare-catch clips listen to `Fired` later.
 --   HighlightService.Fired -> Signal (highlight: HookTypes.Highlight)
 --   HighlightService.Evaluate(player, hitId, distance, previousHighest, previousBest) -> called by SwingService
 

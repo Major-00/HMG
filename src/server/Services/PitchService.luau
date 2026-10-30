@@ -8,7 +8,7 @@
 --   PitchService.ConsumePitch(player, pitchId) -> the pitch if it's the one in play, else nil
 --   PitchService.QueueNext(player, delay)      -> throw the next pitch after `delay` (at least the cooldown)
 --   PitchService.GetTravelTime(player)         -> the active pitcher's release-to-plate seconds
---   PitchService.SetPitcher(player, pitcher)   -> swap the active Pitcher (pitcher pets later)
+--   PitchService.SetPitcher(player, pitcher)   -> swap the active Pitcher (other pitchers later)
 --   PitchService.GetPowerBonus(player)         -> the active pitcher's Power bonus (1 if none)
 
 local Players = game:GetService("Players")

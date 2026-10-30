@@ -1,6 +1,6 @@
 --!strict
 -- LandingService: the on-land hook. After a hit, works out where the ball lands, lets each
--- registered handler push it further (e.g. a catcher pet), then fires Landed with the result.
+-- registered handler push it further (e.g. a bounce), then fires Landed with the result.
 -- No handlers are registered yet.
 --   LandingService.AddHandler(fn)  -> register a HookTypes.LandingHandler (must not yield)
 --   LandingService.Landed          -> Signal (ctx: HookTypes.LandingContext), after all handlers

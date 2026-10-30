@@ -1,5 +1,5 @@
 --!strict
--- StatService: a player's total Power multiplier = bat x rebirth x pitcher bonus.
+-- StatService: a player's total Power multiplier = bat x stadium tier x pitcher bonus.
 -- The formula is Formulas.multiplier (shared, so the client predicts the same number).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

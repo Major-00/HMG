@@ -1,5 +1,5 @@
 --!strict
--- Bats: Bat list: id, display name, Wins cost, Power multiplier.
+-- Bats: Bat list: id, display name, Cash cost, Power multiplier.
 -- (Skeleton only. No gameplay code yet.)
 
 local Bats = {}

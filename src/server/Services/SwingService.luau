@@ -9,9 +9,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage.Shared
 local Formulas = require(Shared.Formulas)
 local Remotes = require(Shared.Remotes)
+local Tuning = require(Shared.Config.Tuning)
 
 local Services = script.Parent
 local DataService = require(Services.DataService)
+local HighlightService = require(Services.HighlightService)
 local LandingService = require(Services.LandingService)
 local PitchService = require(Services.PitchService)
 local StatService = require(Services.StatService)
@@ -45,6 +47,17 @@ local function onSwing(player: Player, pitchId: unknown)
 	local distance = landing.landedAt
 	local wins = Formulas.wins(distance)
 
+	-- Hold the next pitch until the ball-cam is back, so the ball reaches the plate just after.
+	-- The client's camera starts only when HitResult arrives, so add the player's latency (capped).
+	PitchService.QueueNext(
+		player,
+		Formulas.ballCamTime(distance)
+			- PitchService.GetTravelTime(player)
+			+ Tuning.Camera.PITCH_ARRIVE_AFTER_RETURN
+			+ math.clamp(player:GetNetworkPing(), 0, Tuning.Camera.MAX_PING_ALLOWANCE)
+	)
+	local previousHighest = data.highestBiome
+
 	DataService.Update(player, "wins", function(current)
 		return current + wins
 	end)
@@ -54,7 +67,7 @@ local function onSwing(player: Player, pitchId: unknown)
 		lifetime.bestDistance = math.max(lifetime.bestDistance, distance)
 		return lifetime
 	end)
-	if landing.biomeIndex > data.highestBiome then
+	if landing.biomeIndex > previousHighest then
 		DataService.Update(player, "highestBiome", function()
 			return landing.biomeIndex
 		end)
@@ -68,6 +81,7 @@ local function onSwing(player: Player, pitchId: unknown)
 		biomeIndex = landing.biomeIndex,
 		winsGained = wins,
 	})
+	HighlightService.Evaluate(player, pitch.pitchId, distance, previousHighest)
 end
 
 function SwingService.Start()

@@ -2,6 +2,7 @@
 -- InputController: a tap anywhere in the world (not on a button or menu), a mouse click,
 -- or the SWING button swings. Each swing plays the bat animation; if a pitch is in play it
 -- sends Swing(pitchId) once. Taps with no pitch in play only swing the bat.
+-- While the ball-cam is away, taps only count if a pitch is somehow already in play.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,6 +15,7 @@ local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 
 local Controllers = script.Parent
 local BallController = require(Controllers.BallController)
+local CameraController = require(Controllers.CameraController)
 local HudController = require(Controllers.HudController)
 local PitcherController = require(Controllers.PitcherController)
 
@@ -52,8 +54,16 @@ local function playSwing()
 end
 
 local function swing()
-	playSwing()
 	local pitch = PitcherController.TakePending()
+	if CameraController.IsActive() then
+		-- The camera is away. Normally no pitch is in play then; if lag let one through,
+		-- still hit it (the ball-cam switches to the new ball) so the pitch isn't lost.
+		if pitch == nil then
+			return
+		end
+	else
+		playSwing()
+	end
 	if pitch == nil then
 		return
 	end

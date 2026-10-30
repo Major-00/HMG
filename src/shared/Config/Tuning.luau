@@ -37,14 +37,27 @@ local Tuning = {
 	},
 
 	-- Where each World 1 biome starts, in Config/Biomes order (Sandlot ... Canyon).
-	-- Biome 2 at 120 studs = 25 hits from a fresh save (20 + 4 * 25), about 30s of play.
-	BiomeStarts = { 0, 120, 500, 1800, 5000, 12000 },
+	-- Biome 2 at 80 studs = 15 hits from a fresh save (20 + 4 * 15). With the ball-cam each hit
+	-- takes about 2.5-2.8s, so that's roughly 40-45s of play.
+	BiomeStarts = { 0, 80, 500, 1800, 5000, 12000 },
 
 	World = {
 		LANE_COUNT = 8, -- batting lanes per server (one per player; set the place's max players to match)
 		LANE_SPACING = 30, -- studs between lanes, side to side
 		PITCH_DISTANCE = 20, -- studs from the plate to the pitching machine
 		STRIKE_HEIGHT = 3, -- studs above the plate where the ball is hit
+
+		-- Biome ground, built on the client and streamed around the camera
+		TILE_LENGTH = 100, -- longest ground tile; each biome is cut into tiles from its own start
+		STREAM_AHEAD = 600, -- studs of ground kept built in front of the camera
+		STREAM_BEHIND = 150, -- ... and behind it
+		BEHIND_PLATE = 120, -- Sandlot ground also runs this far behind home plate
+		FIELD_MARGIN = 40, -- extra ground width past the outer lanes, each side
+		PROP_BAND = 60, -- width of the prop strip outside the field, each side
+		PROPS_PER_TILE = 3, -- most props per tile (each side gets some)
+		LANDMARK_OFFSET_Z = 60, -- landmark sits this far past its biome's start ...
+		LANDMARK_SIDE = 25, -- ... and this far outside the field's right edge
+		LIGHTING_TWEEN = 0.6, -- seconds to blend lighting into a new biome
 	},
 
 	-- Client-only visuals (no effect on stats)
@@ -58,6 +71,29 @@ local Tuning = {
 		TRAIL_LIFETIME = 0.2, -- seconds a trail segment lasts (short = cheap)
 		MAX_BALLS = 6, -- most balls drawn at once per player
 		CONTACT_TIMEOUT = 1.5, -- seconds to wait for the server's hit result before dropping the ball
+	},
+
+	-- Ball-cam. The server also uses these (Formulas.ballCamTime) to hold the next pitch until
+	-- the camera is back, so every hit can be watched.
+	Camera = {
+		BACK = 14, -- studs behind the ball
+		UP = 5, -- studs above the ball
+		LOOK_AHEAD = 10, -- camera looks this far past the ball
+		MIN_CLEARANCE = 6, -- camera never goes lower than this above the ground
+		FOLLOW_SHARPNESS = 12, -- higher = camera sticks closer to the ball
+		SLOWMO_PORTION = 0.25, -- the last quarter of the final descent ...
+		SLOWMO_SPEED = 0.4, -- ... plays at 40% speed
+		LAND_HOLD = 0.5, -- seconds the camera stays on the landing spot
+		RETURN_TIME = 0.35, -- seconds to swoop back to the batter
+		CUT_BEYOND = 250, -- landings farther than this cut back (fade) instead of swooping
+		CUT_TIME = 0.3, -- seconds for the fade-out + fade-in of a cut
+		PITCH_ARRIVE_AFTER_RETURN = 0.15, -- next ball reaches the plate this long after the camera is back
+		MAX_PING_ALLOWANCE = 0.5, -- most player latency (seconds) added to that wait
+	},
+
+	Highlight = {
+		BANNER_TIME = 1.4, -- seconds the biome banner stays fully visible ...
+		BANNER_QUEUED_TIME = 0.5, -- ... or this long when another banner is waiting
 	},
 
 	Swing = {

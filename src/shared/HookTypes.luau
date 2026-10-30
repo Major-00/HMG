@@ -65,12 +65,45 @@ export type BiomeChallenge = {
 	params: { [string]: any },
 }
 
+-- One piece of a placeholder prop. Built on the client; no assets.
+export type PropPiece = {
+	shape: "Block" | "Ball" | "Cylinder" | "Wedge",
+	size: Vector3,
+	offset: Vector3, -- from the prop's ground point; y is the piece's center height
+	color: Color3,
+	material: Enum.Material?, -- default SmoothPlastic
+	rot: Vector3?, -- degrees (cylinders run along X; rot = (0, 0, 90) stands one up)
+}
+export type Prop = { PropPiece }
+
+export type BiomeLighting = {
+	clockTime: number,
+	brightness: number,
+	ambient: Color3,
+	outdoorAmbient: Color3,
+	atmosphereColor: Color3,
+	atmosphereDecay: Color3,
+	density: number,
+	haze: number,
+}
+
+export type BiomeVisual = {
+	ground: Color3, -- field ground under the lanes
+	material: Enum.Material,
+	side: Color3, -- ground outside the field, where props stand
+	sideMaterial: Enum.Material,
+	accent: Color3, -- start line, banner and landing popup color
+	lighting: BiomeLighting,
+	props: { Prop }, -- picked from per tile
+}
+
 export type BiomeConfig = {
 	id: string,
 	displayName: string,
 	landmark: string, -- name of a model under ReplicatedStorage.Landmarks
 	challenge: BiomeChallenge?, -- empty for now
-	-- startDistance, length and colors are added in the economy/world step.
+	visual: BiomeVisual,
+	-- Where each biome starts is in Config/Tuning (BiomeStarts).
 }
 
 return {}

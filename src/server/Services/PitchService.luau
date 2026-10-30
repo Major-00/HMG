@@ -1,9 +1,12 @@
 --!strict
 -- PitchService: the pitcher slot. Each player has one active Pitcher and at most one pitch in play.
--- A pitch is hittable from release until `expiresAt`. A hit or a miss ends it, and the next
--- pitch comes after the pitcher's cooldown. Swings that don't match the pitch in play do nothing,
--- so tapping faster than the pitcher throws gains nothing.
+-- A pitch is hittable from release until `expiresAt`. A miss throws the next pitch after the
+-- pitcher's cooldown; after a hit, SwingService calls QueueNext once it knows how long the
+-- ball-cam will take. Swings that don't match the pitch in play do nothing, so tapping faster
+-- than the pitcher throws gains nothing.
 --   PitchService.ConsumePitch(player, pitchId) -> the pitch if it's a valid hit, else nil
+--   PitchService.QueueNext(player, delay)      -> throw the next pitch after `delay` (at least the cooldown)
+--   PitchService.GetTravelTime(player)         -> the active pitcher's release-to-plate seconds
 --   PitchService.SetPitcher(player, pitcher)   -> swap the active Pitcher (pitcher pets later)
 --   PitchService.GetPowerBonus(player)         -> the active pitcher's Power bonus (1 if none)
 
@@ -11,6 +14,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
+local Formulas = require(Shared.Formulas)
 local HookTypes = require(Shared.HookTypes)
 local Remotes = require(Shared.Remotes)
 local Tuning = require(Shared.Config.Tuning)
@@ -94,8 +98,23 @@ function PitchService.ConsumePitch(player: Player, pitchId: number): HookTypes.P
 		return nil
 	end
 	state.pending = nil
-	schedule(player, state, state.pitcher.cooldown(player))
+	-- The caller calls QueueNext with the real delay. This backup (the longest possible ball-cam)
+	-- keeps pitches coming if anything fails before that.
+	schedule(player, state, Formulas.ballCamTime(math.huge))
 	return pitch
+end
+
+function PitchService.QueueNext(player: Player, delay: number)
+	local state = states[player]
+	if state == nil then
+		return
+	end
+	schedule(player, state, math.max(delay, state.pitcher.cooldown(player)))
+end
+
+function PitchService.GetTravelTime(player: Player): number
+	local state = states[player]
+	return if state then state.pitcher.travelTime(player) else Tuning.Pitch.MACHINE_TRAVEL_TIME
 end
 
 function PitchService.SetPitcher(player: Player, pitcher: HookTypes.Pitcher)

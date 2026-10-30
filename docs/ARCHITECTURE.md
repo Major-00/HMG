@@ -45,7 +45,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Piece | Built by | Why |
 |---|---|---|
 | Batting lanes (pad, plate, batter spawn, pitching machine) | Server (`WorldService`) | Characters stand on them, so they must be physical and replicated. One lane per player (`Tuning.World.LANE_COUNT`, default 8), side by side along X; balls fly down +Z. Lane models are Persistent for streaming. |
-| Biome strips (ground, color, simple props) | Client (`WorldController`) from `Config/Biomes` | Nothing to replicate. Cheap on phones, and only nearby strips need to be built. |
+| Biome strips (ground, side bands, simple props, start lines, lighting) | Client (`WorldController`) from `Config/Biomes` | Nothing to replicate. Each biome is cut into tiles (`Tuning.World.TILE_LENGTH`) and only tiles near the camera exist (`STREAM_AHEAD` / `STREAM_BEHIND`), pooled. Lighting and the Atmosphere blend to the biome under the camera. |
 | Landmarks | Client clones from `ReplicatedStorage.Landmarks` | Hand-made models, placed by config. |
 
 ## 3. Modules
@@ -57,9 +57,9 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/DataService | ProfileStore wrapper: load, autosave, release, migrate. Only module that touches DataStores. |
 | Services/StatService | Total Power multiplier (bat × pets × rebirth × pitcher bonus). |
 | Services/PitchService | **Pitcher slot.** Holds each player's active Pitcher, schedules pitches, keeps the one pending pitch. |
-| Services/SwingService | Handles `Swing`: matches it to the pending pitch, adds Power, makes the hit's first flight segment. |
+| Services/SwingService | Handles `Swing`: matches it to the pending pitch, adds Power, makes the hit's first flight segment, queues the next pitch after the ball-cam. |
 | Services/LandingService | **On-land hook.** Runs the landing handlers, then finalizes distance, biome and Wins. |
-| Services/HighlightService | **Highlight event.** Detects new records and biome crossings; fires a server Signal and the `Highlight` remote. |
+| Services/HighlightService | **Highlight event.** Detects biomes reached for the first time this run; fires a server Signal and the `Highlight` remote. Records are not fired yet (every early hit is one). |
 | Services/ChallengeService | **Per-biome challenge.** Reads each biome's `challenge` slot. Does nothing while all are nil. |
 | Services/WorldService | Builds the batting area and pitcher spot at startup. |
 | Services/BatService | Buy and equip bats with Wins. |
@@ -80,10 +80,10 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/StateController | Latest snapshot from the server; others read it. |
 | Controllers/InputController | Tap anywhere (not on menus) or the swing button fires `Swing` with the pending `pitchId`. |
 | Controllers/PitcherController | Shows the active pitcher and plays each `Pitch` using that pitcher's visual. |
-| Controllers/BallController | Swing animation, contact, and the flight segments from `HitResult`. |
-| Controllers/WorldController | Generates biome strips and places landmarks from config. |
-| Controllers/CameraController | Stays on the batter; does a fly-along when asked by HighlightController. |
-| Controllers/HighlightController | Receives `Highlight`; triggers the camera fly-along now and a camera pet later. |
+| Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
+| Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. |
+| Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hold on the landing, swoop (or fade-cut when far) back to the batter. |
+| Controllers/HighlightController | Biome banner at the moment the ball crosses a new biome's line; distance popup at each landing; client `Landed` signal. |
 | Controllers/HudController | Power, Wins, distance bar with biome markers, swing button. |
 | Controllers/BatShopController | Bat shop UI. |
 | Controllers/EggController | Egg UI with full odds before hatching; hatch animation. |
@@ -101,7 +101,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Formulas | Pure math: multipliers, distance from Power, Wins from distance, rebirth cost. |
 | Format | Number display (1.2K, 3.4M). |
 | Signal | Small server/client event utility used by the hooks. |
-| Config/Tuning | **Every tunable number** (pitch timing, Power, distance, Wins, biome start distances, lane layout, flight visuals). |
+| Config/Tuning | **Every tunable number** (pitch timing, Power, distance, Wins, biome start distances, lane layout, streaming, flight visuals, ball-cam). |
 | Config/Bats, Eggs, Pets, Biomes, Rebirth | Catalog tables (ids, names, per-item stats). |
 
 ## 4. The hit flow
@@ -122,9 +122,13 @@ LandingService: for each LandingHandler (none yet) → may append segments
 HighlightService: new best distance? new biome this run? → Signal + Highlight remote
 ChallengeService: listens to landings; no-op while challenges are nil
       ▼
-PitchService schedules the next pitch after pitcher.cooldown()
+PitchService.QueueNext: next pitch after the ball-cam (Formulas.ballCamTime), so it
+      reaches the plate just after the camera is back (a miss waits only the cooldown)
 ```
 
+- **The ball-cam sets the pace.** Every hit is watched: the server holds the next pitch for
+  `Formulas.ballCamTime(distance)` (air time + slow motion + landing hold + return), the same
+  numbers the client camera uses. Taps while the camera is away are ignored.
 - **Pitch cadence is the tap limit.** One pending pitch per player means no extra
   rate limiter is needed, and spam does nothing. A faster pitcher pet is a natural upgrade later.
 - **Contact is instant:** any tap while a pitch is pending is a hit, wherever the ball is
@@ -149,8 +153,13 @@ hit lands, each handler sees the landing spot and may return one more `FlightSeg
 
 **Highlight event.** `HighlightService.Fired` (server Signal) plus the `Highlight` remote
 to that player, for `kind = "record"` (beats lifetime best distance) or `"biome"`
-(first time reaching a biome this run). Now it drives a short camera fly-along. Later,
-a camera pet listens to the same event to save a clip.
+(first time reaching a biome this run; one per biome if a hit reaches several). The client
+shows a banner when the ball crosses that biome's line. "record" is defined but not fired yet.
+Later, a camera pet listens to the same event to save a clip.
+
+The client also has `HighlightController.Landed`, fired when the ball visibly lands (after
+the distance popup). It is the place for visual landing effects; the server's on-land hook
+has already decided the result by then.
 
 **Per-biome challenge slot.** Every entry in `Config/Biomes` has `challenge = nil`.
 `ChallengeService` will read it and listen to landings when challenges exist.

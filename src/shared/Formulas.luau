@@ -86,12 +86,32 @@ function Formulas.slowedAirTime(distance: number): number
 	return base + base * c.SLOWMO_PORTION * (1 / c.SLOWMO_SPEED - 1)
 end
 
--- Seconds from contact until the ball-cam is back on the batter.
--- The server uses this to time the next pitch, so it must match the client's camera.
-function Formulas.ballCamTime(distance: number): number
+-- Seconds the catch reveal holds the camera on the landing: FULL for a new species of
+-- Reveal.FULL_FROM_RARITY or rarer, SHORT otherwise (and when there's no catch).
+-- `catch` is a HookTypes.Catch (only rarity and isNewSpecies are read).
+function Formulas.revealTime(catch: any?): number
+	local r = Tuning.Reveal
+	if catch and catch.isNewSpecies then
+		local rank = Mascots.RarityRank[catch.rarity] or 1
+		if rank >= (Mascots.RarityRank[r.FULL_FROM_RARITY] or math.huge) then
+			return r.FULL
+		end
+	end
+	return r.SHORT
+end
+
+-- Seconds the camera takes to come back to the batter after the reveal: a swoop, or a fade cut
+-- for long hits.
+function Formulas.returnTime(distance: number): number
 	local c = Tuning.Camera
-	local back = if distance > c.CUT_BEYOND then c.CUT_TIME else c.RETURN_TIME
-	return Formulas.slowedAirTime(distance) + c.LAND_HOLD + back
+	return if distance > c.CUT_BEYOND then c.CUT_TIME else c.RETURN_TIME
+end
+
+-- Seconds from contact until the ball-cam is back on the batter, with a reveal of `reveal`
+-- seconds at the landing (default Reveal.SHORT). The server uses this to time the next pitch,
+-- so it must match the client's camera.
+function Formulas.ballCamTime(distance: number, reveal: number?): number
+	return Formulas.slowedAirTime(distance) + (reveal or Tuning.Reveal.SHORT) + Formulas.returnTime(distance)
 end
 
 function Formulas.biomeNameAt(distance: number, world: number?): string

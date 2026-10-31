@@ -47,14 +47,16 @@ local function onSwing(player: Player, pitchId: unknown)
 	})
 	local distance = landing.landedAt
 
-	-- Hold the next pitch until the ball-cam is back, so the ball reaches the plate just after.
-	-- The client's camera started at the tap, before this swing reached the server, so it is
-	-- always back before the pitch arrives.
+	-- Hold the next pitch until the ball-cam (flight, catch reveal, return) is back, so the ball
+	-- reaches the plate just after. The client's camera started at the tap, before this swing
+	-- reached the server, so it is always back before the pitch arrives. A skipped reveal
+	-- (Ready) can bring it forward, but never sooner than a reveal of Reveal.MIN_SHOWN.
+	local lead = Tuning.Camera.PITCH_ARRIVE_AFTER_RETURN - PitchService.GetTravelTime(player)
 	PitchService.QueueNext(
 		player,
-		Formulas.ballCamTime(distance)
-			- PitchService.GetTravelTime(player)
-			+ Tuning.Camera.PITCH_ARRIVE_AFTER_RETURN
+		Formulas.ballCamTime(distance, Formulas.revealTime(landing.catch)) + lead,
+		pitch.pitchId,
+		Formulas.ballCamTime(distance, Tuning.Reveal.MIN_SHOWN) + lead
 	)
 	local previousHighest = data.highestBiome
 	local previousBest = data.lifetime.bestDistance

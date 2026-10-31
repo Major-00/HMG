@@ -189,7 +189,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/PitcherController | Shows the active pitcher and plays each `Pitch` using that pitcher's visual. |
 | Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
 | Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. |
-| Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hand off to the catch reveal at landing, swoop (or fade-cut when far) back to the batter. |
+| Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hold on the landing for the catch reveal (time from the server's catch; a plain hold until the reveal visuals step), swoop (or fade-cut when far) back to the batter. `SkipReveal` on tap; sends `Ready`. |
 | Controllers/CatchRevealController *(planned)* | The Mascot's view as it chases and catches the ball; name types in letter by letter. Full for new Rare+ species, 1s otherwise, tap to skip (sends `Ready`). |
 | Controllers/HighlightController | Biome banner at the line crossing; distance popup; catch and sold toasts; client `Landed` signal. |
 | Controllers/HudController | Power, Cash (and Cash/s), distance bar with biome markers, swing button. |
@@ -246,13 +246,17 @@ PitchService.QueueNext: next pitch after ball-cam + reveal (Formulas.ballCamTime
 ```
 
 - **The ball-cam sets the pace.** Every hit is watched: the server holds the next pitch for
-  `Formulas.ballCamTime` (air time + slow motion + reveal + return), the same numbers the
-  client camera uses. The catch reveal *replaces* the old landing hold, so it adds little time.
-  No pitch is in play while the camera is away, so those taps only swing the bat; if lag ever
-  lets a pitch through, a tap still hits it.
-- **Skipping.** Tapping during a reveal skips it and sends `Ready`. The server can bring the next
-  pitch forward but never inside a minimum gap, so spamming skip can't beat the normal pace.
-  Auto-Swing skips the same way (guardrail 6).
+  `Formulas.ballCamTime(distance, Formulas.revealTime(catch))` (air time + slow motion +
+  reveal + return), the same numbers the client camera uses. The catch reveal *replaces* the
+  old 0.5s landing hold: 1s (`Reveal.SHORT`), or 3s (`Reveal.FULL`) for a new Rare+ species.
+  Biome 2 measured at 38s with no skipping. No pitch is in play while the camera is away, so
+  those taps only skip the reveal or swing the bat; if lag ever lets a pitch through, a tap
+  still hits it. The ball stays on the ground through the whole reveal (`Flight.LINGER_TIME`).
+- **Skipping.** Tapping during a reveal skips it and sends `Ready(hitId)`. If the server's result
+  hasn't arrived by the landing, the client skips the reveal on its own (and sends `Ready`) rather
+  than wait. The server brings the next pitch forward, but never sooner than a reveal of
+  `Reveal.MIN_SHOWN` would allow, once per hit and only before the next pitch is thrown, so
+  spamming skip can't beat that pace. Auto-Swing will skip the same way (guardrail 6).
 - **Pitch cadence is the tap limit.** One pending pitch per player means no extra rate limiter
   is needed, and spam does nothing.
 - **Every tap on a pitch is a hit** ([CLAUDE.md](../CLAUDE.md) guardrails 1–3): no timing,
@@ -309,7 +313,7 @@ rows don't exist yet.
 | Direction | Name | Type | Payload |
 |---|---|---|---|
 | C → S | `Swing` | Event | `pitchId` |
-| C → S | `Ready` *(planned)* | Event | `hitId`: the reveal was skipped; the server may bring the next pitch forward |
+| C → S | `Ready` | Event | `hitId`: the reveal was skipped; the server may bring the next pitch forward, never sooner than its floor |
 | C → S | `GetData` | Function | → full snapshot of the caller's own save |
 | C → S | `BuyBat` / `EquipBat` | Function | `batId` → `{ ok, err? }` |
 | C → S | `BuyBall` *(planned)* | Function | `ballId` → `{ ok, err? }` |

@@ -4,7 +4,8 @@
 -- is a hit (CLAUDE.md): the ball launches at once and Swing(pitchId) goes to the server, which
 -- computes the numbers from stats only. One hit per pitch. Taps with no pitch in play only
 -- swing the bat.
--- While the ball-cam is away, taps only count if a pitch is somehow already in play.
+-- While the ball-cam is away, taps only count if a pitch is somehow already in play; a tap
+-- during the catch reveal skips it.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -72,6 +73,7 @@ local function swing()
 		-- The camera is away. Normally no pitch is in play then; if lag let one through,
 		-- still hit it (the ball-cam switches to the new ball) so the pitch isn't lost.
 		if pitch == nil then
+			CameraController.SkipReveal() -- a tap during the catch reveal skips it
 			return
 		end
 	else

@@ -61,7 +61,10 @@ local Tuning = {
 		SECONDS_PER_STUD = 0.004, -- added air time per stud of distance
 		ARC_HEIGHT_RATIO = 0.25, -- arc peak = distance * ratio ...
 		MAX_ARC_HEIGHT = 250, -- ... up to this many studs
-		LINGER_TIME = 0.8, -- seconds the ball stays on the ground after landing
+		-- Seconds the ball stays on the ground after landing. Longer than the longest catch reveal
+		-- (Reveal.FULL), so the ball is there for the whole reveal and the camera can still read
+		-- the flight's final distance when it heads back.
+		LINGER_TIME = 3.5,
 		TRAIL_LIFETIME = 0.2, -- seconds a trail segment lasts (short = cheap)
 		MAX_BALLS = 6, -- most balls drawn at once per player
 	},
@@ -76,7 +79,7 @@ local Tuning = {
 		FOLLOW_SHARPNESS = 12, -- higher = camera sticks closer to the ball
 		SLOWMO_PORTION = 0.25, -- the last quarter of the final descent ...
 		SLOWMO_SPEED = 0.4, -- ... plays at 40% speed
-		LAND_HOLD = 0.5, -- seconds the camera stays on the landing spot
+		-- (The camera stays on the landing for the catch reveal: Tuning.Reveal.)
 		RETURN_TIME = 0.35, -- seconds to swoop back to the batter
 		CUT_BEYOND = 250, -- landings farther than this cut back (fade) instead of swooping
 		CUT_TIME = 0.3, -- seconds for the fade-out + fade-in of a cut
@@ -131,6 +134,19 @@ local Tuning = {
 
 		-- Sell value = this many seconds of the Mascot's earnings (variant and size included).
 		SELL_SECONDS = 30,
+	},
+
+	-- The catch reveal: the camera stays on the landing while the Mascot catches the ball. It
+	-- replaces the old landing hold, and the server times the next pitch with the same numbers
+	-- (Formulas.revealTime / ballCamTime). Visual only: it never changes the result.
+	Reveal = {
+		SHORT = 1, -- seconds for most catches
+		FULL = 3, -- seconds for a new species of FULL_FROM_RARITY or rarer
+		FULL_FROM_RARITY = "rare",
+		-- Tapping skips the reveal and tells the server (Ready) so the next pitch comes sooner.
+		-- The server never throws it earlier than this long after the ball lands (plus the
+		-- camera's return), so skipping can't make the game faster than this.
+		MIN_SHOWN = 0.3,
 	},
 
 	-- Seated Mascots earn Cash every second (Formulas.cashRate), online and offline.

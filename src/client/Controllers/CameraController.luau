@@ -1,16 +1,22 @@
 --!strict
 -- CameraController: the ball-cam. On every hit the camera snaps behind the ball, follows it
--- (the ball itself slows down near the end, see BallController), holds on the landing spot,
--- then returns to the batter: a quick swoop for short hits, a fade cut for long ones.
+-- (the ball itself slows down near the end, see BallController), stays on the landing for the
+-- catch reveal (Formulas.revealTime: 1s, or longer for a new rare species), then returns to the
+-- batter: a quick swoop for short hits, a fade cut for long ones.
 -- Afterwards the normal Roblox camera takes over again exactly where it was before the hit.
 -- The server times the next pitch from the same numbers (Formulas.ballCamTime).
---   CameraController.IsActive() -> true while the camera is away from the batter
+-- Ending the reveal early (a tap, or the server's result arriving too late to know the catch)
+-- sends Ready, so the server can bring the next pitch forward; it never waits on the client.
+--   CameraController.IsActive()   -> true while the camera is away from the batter
+--   CameraController.SkipReveal() -> ends the reveal now if one is showing; true if it did
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Formulas = require(Shared:WaitForChild("Formulas"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
 local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 
 local BallController = require(script.Parent.BallController)
@@ -31,12 +37,16 @@ type Cam = {
 	phaseStart: number,
 	returnFrom: CFrame?,
 	cutSwapped: boolean,
+	holdFor: number, -- seconds of catch reveal at the landing
 }
 
 local CameraController = {}
 
 local cam: Cam? = nil
 local fade: Frame
+-- hitId -> reveal seconds, from the server's HitResult (it carries the catch). Kept briefly.
+local revealTimes: { [number]: { seconds: number, at: number } } = {}
+local REVEAL_MEMORY = 20
 
 local function camera(): Camera
 	return workspace.CurrentCamera
@@ -92,6 +102,7 @@ local function onLaunched(hitId: number, info: any)
 		phaseStart = os.clock(),
 		returnFrom = nil,
 		cutSwapped = false,
+		holdFor = 0,
 	}
 	fade.BackgroundTransparency = 1
 	current.CameraType = Enum.CameraType.Scriptable
@@ -113,9 +124,37 @@ local function onTouchdown(
 	if state == nil or state.hitId ~= hitId or not isFinal or state.phase ~= "follow" then
 		return
 	end
-	state.phase = "hold"
 	state.landing = position
+	local reveal = revealTimes[hitId]
+	revealTimes[hitId] = nil
+	if reveal == nil then
+		-- The server's result (and so the catch) isn't here yet: skip the reveal rather than
+		-- make the player wait. The catch shows as a toast when it arrives.
+		beginReturn(state)
+		Remotes.Event("Ready"):FireServer(hitId)
+		return
+	end
+	state.phase = "hold"
+	state.holdFor = reveal.seconds
 	state.phaseStart = os.clock()
+end
+
+local function onHitResult(result: any)
+	if type(result) ~= "table" or type(result.hitId) ~= "number" then
+		return
+	end
+	local now = os.clock()
+	for hitId, entry in revealTimes do
+		if now - entry.at > REVEAL_MEMORY then
+			revealTimes[hitId] = nil
+		end
+	end
+	revealTimes[result.hitId] = { seconds = Formulas.revealTime(result.catch), at = now }
+	-- Keep the server's final distance for this hit: it decides swoop or cut on the way back.
+	local state = cam
+	if state and state.hitId == result.hitId and type(result.distance) == "number" then
+		state.distance = result.distance
+	end
 end
 
 local function step(dt: number)
@@ -145,7 +184,7 @@ local function step(dt: number)
 	elseif state.phase == "hold" then
 		local landing = state.landing :: Vector3
 		current.CFrame = current.CFrame:Lerp(chaseCFrame(landing, 3), smoothing(dt))
-		if now - state.phaseStart >= c.LAND_HOLD then
+		if now - state.phaseStart >= state.holdFor then
 			beginReturn(state)
 		end
 	else
@@ -180,6 +219,18 @@ function CameraController.IsActive(): boolean
 	return cam ~= nil
 end
 
+-- A tap during the catch reveal skips it: the camera heads back now and the server is told,
+-- so the next pitch can come sooner (never sooner than its own minimum).
+function CameraController.SkipReveal(): boolean
+	local state = cam
+	if state == nil or state.phase ~= "hold" then
+		return false
+	end
+	beginReturn(state)
+	Remotes.Event("Ready"):FireServer(state.hitId)
+	return true
+end
+
 function CameraController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "BallCamFade"
@@ -200,6 +251,7 @@ end
 function CameraController.Start()
 	BallController.Launched:Connect(onLaunched)
 	BallController.Touchdown:Connect(onTouchdown)
+	Remotes.Event("HitResult").OnClientEvent:Connect(onHitResult)
 	-- A respawn mid-flight goes straight back to the (new) batter.
 	player.CharacterAdded:Connect(function()
 		if cam then

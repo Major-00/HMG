@@ -6,7 +6,10 @@
 -- server so a tap from a slow connection still lands. An unswung pitch brings the next one after
 -- the cooldown; after a hit, SwingService calls QueueNext once it knows how long the ball-cam takes.
 --   PitchService.ConsumePitch(player, pitchId) -> the pitch if it's the one in play, else nil
---   PitchService.QueueNext(player, delay)      -> throw the next pitch after `delay` (at least the cooldown)
+--   PitchService.QueueNext(player, delay, hitId?, floor?)
+--       -> throw the next pitch after `delay` (at least the cooldown). With a hitId and floor, a
+--          Ready(hitId) from the client (the catch reveal was skipped) can bring it forward, but
+--          never sooner than `floor` seconds from now.
 --   PitchService.GetTravelTime(player)         -> the active pitcher's release-to-plate seconds
 --   PitchService.SetPitcher(player, pitcher)   -> swap the active Pitcher (other pitchers later)
 --   PitchService.GetPowerBonus(player)         -> the active pitcher's Power bonus (1 if none)
@@ -29,6 +32,9 @@ type State = {
 	pending: HookTypes.Pitch?,
 	lastId: number,
 	token: number, -- bumps on every schedule; stale timers check it and stop
+	throwAt: number, -- os.clock() the next throw is scheduled for
+	-- After a hit: the earliest a Ready for that hit may bring the next pitch to. Cleared once used.
+	skip: { hitId: number, floorAt: number }?,
 }
 
 local PitchService = {}
@@ -42,6 +48,7 @@ local function throw(player: Player, state: State)
 	if player.Parent ~= Players or states[player] ~= state then
 		return
 	end
+	state.skip = nil -- a Ready for the last hit can't move anything once the next pitch is out
 	local now = workspace:GetServerTimeNow()
 	local arriveAt = now + state.pitcher.travelTime(player)
 	state.lastId += 1
@@ -66,6 +73,7 @@ end
 
 schedule = function(player: Player, state: State, delay: number)
 	state.token += 1
+	state.throwAt = os.clock() + delay
 	local token = state.token
 	task.delay(delay, function()
 		if states[player] == state and state.token == token then
@@ -80,6 +88,8 @@ local function startPitching(player: Player, data: any)
 		pending = nil,
 		lastId = 0,
 		token = 0,
+		throwAt = 0,
+		skip = nil,
 	}
 	states[player] = state
 	if player.Character == nil then
@@ -102,16 +112,39 @@ function PitchService.ConsumePitch(player: Player, pitchId: number): HookTypes.P
 	state.pending = nil
 	-- The caller calls QueueNext with the real delay. This backup (the longest possible ball-cam)
 	-- keeps pitches coming if anything fails before that.
-	schedule(player, state, Formulas.ballCamTime(math.huge))
+	state.skip = nil
+	schedule(player, state, Formulas.ballCamTime(math.huge, Tuning.Reveal.FULL))
 	return pitch
 end
 
-function PitchService.QueueNext(player: Player, delay: number)
+function PitchService.QueueNext(player: Player, delay: number, hitId: number?, floor: number?)
 	local state = states[player]
 	if state == nil then
 		return
 	end
-	schedule(player, state, math.max(delay, state.pitcher.cooldown(player)))
+	local cooldown = state.pitcher.cooldown(player)
+	schedule(player, state, math.max(delay, cooldown))
+	state.skip = if hitId and floor
+		then { hitId = hitId, floorAt = os.clock() + math.max(floor, cooldown) }
+		else nil
+end
+
+-- The client skipped the catch reveal for `hitId`: bring the next pitch forward to the floor
+-- set by QueueNext. Once per hit; ignored for any other hit, or if it wouldn't be sooner.
+local function onReady(player: Player, hitId: unknown)
+	local state = states[player]
+	local skip = state and state.skip
+	if state == nil or skip == nil or type(hitId) ~= "number" or skip.hitId ~= hitId then
+		return
+	end
+	state.skip = nil
+	if state.pending ~= nil then
+		return -- the next pitch is already in play
+	end
+	local now = os.clock()
+	if skip.floorAt < state.throwAt then
+		schedule(player, state, math.max(skip.floorAt - now, 0))
+	end
 end
 
 function PitchService.GetTravelTime(player: Player): number
@@ -144,6 +177,7 @@ end
 
 function PitchService.Start()
 	DataService.Loaded:Connect(startPitching)
+	Remotes.Event("Ready").OnServerEvent:Connect(onReady)
 	Players.PlayerRemoving:Connect(function(player)
 		states[player] = nil
 	end)

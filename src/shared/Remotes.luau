@@ -12,6 +12,7 @@ local Remotes = {}
 -- Client -> Server (RemoteEvent)
 Remotes.Events = {
 	"Swing", -- (pitchId: number). Always a hit if it matches the pitch in play; otherwise ignored.
+	"Ready", -- (hitId: number). The catch reveal for that hit was skipped; the next pitch may come sooner.
 }
 
 -- Client -> Server (RemoteFunction, returns { ok: boolean, err: string?, ... })

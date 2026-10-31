@@ -343,9 +343,17 @@ function MascotPanelController.Init()
 
 	local function show(visible: boolean)
 		panel.Visible = visible
-		openButton.Visible = not visible
 		redraw(true)
+		UILayout.PanelChanged:Fire(if visible then "mascots" else nil)
 	end
+	-- One side panel at a time: another opening closes this one; the open buttons hide while
+	-- any panel is up.
+	UILayout.PanelChanged:Connect(function(name: string?)
+		if name ~= "mascots" then
+			panel.Visible = false
+		end
+		openButton.Visible = name == nil
+	end)
 	open.Activated:Connect(function()
 		show(true)
 	end)

@@ -167,8 +167,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/MascotInventory | Pure rules for seats, hotbar, On Deck, Auto-Sell, Lock, Sell, Move (swap) and Equip Best, plus `Check` (10 seats, 4 hotbar, every Mascot in exactly one slot). No services; tested by `Dev/MascotInventoryTest` (DevData `selftest`). |
 | Services/IncomeService | Pays `Formulas.cashRate` (seated Mascots × park × stadium tier) every second, and the capped offline payout at load; answers `GetWelcomeBack` once. DataService stamps `lastOnline` on every save (`profile.OnSave`). |
 | Services/ParkService | Publishes each player's seated Mascots on their lane model (`Seats`: `species,variant,size` per seat, `;`-joined), once per frame when seats change. (Planned: park upgrades.) |
-| Services/BallService *(planned)* | Buys ball tiers with Cash (in order, permanent for the run). |
-| Services/BatService | Buy and equip bats with Cash. |
+| Services/BallService | `BuyBall`: the next ball tier in order, Cash only, permanent for the run. Sends `ShopNotice` once per tier per run when Cash first covers the next ball (`balls.notified`). |
+| Services/BatService | `BuyBat` (the next bat in order, equips it) and `EquipBat` (any bat you own), with Cash. |
 | Services/PromotionService *(stub)* | Stadium promotion: check the requirement, reset run progress, keep every Mascot, raise the tier. |
 | Services/HighlightService | **Highlight event.** Biomes reached for the first time this run, record milestones, and (planned) catches that earn a reveal or rare-catch clip. Fires a server Signal and the `Highlight` remote. |
 | Services/ChallengeService | **Per-biome challenge.** Reads each biome's `challenge` slot. Does nothing while all are nil. |
@@ -202,7 +202,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Modules/MascotInfo | How a Mascot is described in the UI, which slot a move targets, and the Sell button (second tap for Rare+, ignores taps on a just-drawn button, resets if refused). |
 | Modules/UILayout | Shared screen layout (hotbar height, margins) so toasts, reveal text and the panel stay clear of the hotbar and SWING. |
 | Controllers/IndexController *(planned)* | The Index: world and biome tabs, 8 cards per biome. |
-| Controllers/ShopController *(planned, from BatShopController)* | Balls (with each tier's odds) and bats. |
+| Controllers/ShopController | The Shop panel (button beside Mascots; one side panel at a time): Balls with each tier's rarity odds at your best distance (`Formulas.rarityOdds`, the numbers the server rolls with), and Bats. Shows the new-ball notice and makes the Shop button glow. |
 | Controllers/WelcomeBackController | Shows the offline payout for 4s; never covers SWING and ignores taps. |
 | Controllers/PromotionController *(stub)* | Promotion panel: requirement, what resets, what's kept, what the new tier gives. |
 | PitcherVisuals/PitchingMachine | Machine model and throw animation. |
@@ -221,10 +221,10 @@ number along one straight track, so the server never needs the biome geometry.
 | Config/Tuning | **Every tunable number** (pitch timing, Power, distance, biome starts, lanes, streaming, ball-cam, highlights, swing, catch: Luck, variants, sizes, Cash/s, sell value; planned: reveal, offline). |
 | Config/Biomes | Biome visuals, keyed by world (`Biomes[1]` = World 1). |
 | Config/Mascots | Rarities, and species keyed by world then biome id: 6 per biome at launch (one per rarity), 8 Index slots. |
-| Config/Balls | Ball tiers in unlock order with base rarity weights (only the basic ball so far). |
+| Config/Balls | 6 ball tiers in unlock order: price and base rarity weights. |
 | Config/Stadium | The 4 stadium tiers with their Power and Cash multipliers (tiers 2–4 tuned in the promotion step). |
 | Config/Park | Ballpark layout (seats, sign, upgrade spots) and drawing distances. (Planned: upgrade prices and bonuses.) |
-| Config/Bats | Bat catalog (ids, names, prices, multipliers). |
+| Config/Bats | 6 bats in order: price and Power-per-hit multiplier (`List`, `ById`). |
 
 ## 5. The hit flow
 
@@ -322,7 +322,7 @@ rows don't exist yet.
 | C → S | `Ready` | Event | `hitId`: the reveal was skipped; the server may bring the next pitch forward, never sooner than its floor |
 | C → S | `GetData` | Function | → full snapshot of the caller's own save |
 | C → S | `BuyBat` / `EquipBat` | Function | `batId` → `{ ok, err? }` |
-| C → S | `BuyBall` *(planned)* | Function | `ballId` → `{ ok, err? }` |
+| C → S | `BuyBall` | Function | `ballId` (the next tier) → `{ ok, err? }`; Cash only |
 | C → S | `BuyParkUpgrade` *(planned)* | Function | `upgradeId` → `{ ok, err? }` |
 | C → S | `SellMascot` / `LockMascot` | Function | `uid` (+ `locked`) → `{ ok, err?, cash?, species? }`; selling a locked Mascot is refused |
 | C → S | `MoveMascot` | Function | `uid, place, slot` (`"seats"`, `"hotbar"` or `"onDeck"`; swaps if taken, which is also the On Deck swap) → `{ ok, err? }` |
@@ -332,6 +332,7 @@ rows don't exist yet.
 | S → C | `HitResult` | Event | `{ hitId, powerGained, pitcherBonus, segments, distance, biomeIndex, catch? }`. `catch` = `HookTypes.Catch`: `{ uid, species, rarity, variant, size, cashPerSec, placedIn, slot?, isNewSpecies, sold? }` |
 | S → C | `Highlight` | Event | `Highlight` minus `player` |
 | C → S | `GetWelcomeBack` | Function | → `{ seconds, cash }` once after an offline payout (60s+ away), else nil |
+| S → C | `ShopNotice` | Event | `{ kind = "ball", id }`: your Cash first covers this ball (once per tier per run) |
 | S → C | `DataChanged` | Event | changed top-level keys only |
 
 Rules: the client never sends a number that becomes a stat. Every argument is
@@ -350,7 +351,7 @@ adds missing keys, so the wipe is explicit.
   -- run progress: reset on stadium promotion
   power = 0, cash = 0,
   bats = { owned = { starter = true }, equipped = "starter" },
-  balls = { owned = { basic = true } },          -- every hit uses the best owned
+  balls = { owned = { basic = true }, notified = {} }, -- every hit uses the best owned
   park = { bleachers = 0, concessions = 0, scoreboard = 0, lights = 0, jumbotron = 0 },
   highestBiome = 1,
   -- kept forever (Safe at home)

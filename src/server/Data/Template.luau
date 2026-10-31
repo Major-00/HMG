@@ -18,6 +18,7 @@ local Template: Types.PlayerData = {
 	},
 	balls = {
 		owned = { basic = true },
+		notified = {}, -- ball ids whose "New ball unlocked" notice was shown this run
 	},
 	park = {
 		bleachers = 0,

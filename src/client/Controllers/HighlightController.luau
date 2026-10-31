@@ -291,7 +291,7 @@ local function rarityOf(id: string): any
 	return Mascots.Rarities[Mascots.RarityRank[id] or 1]
 end
 
-local playToast: () -> ()
+local playToast: (notice: any?) -> ()
 
 local function showCatch(hitId: number, catch: any)
 	if catchShown[hitId] then
@@ -336,8 +336,22 @@ local function showCatch(hitId: number, catch: any)
 	playToast()
 end
 
+-- Notices ("New ball unlocked!") wait for the toast to be free, so they never cut off a catch,
+-- and one that a catch interrupts within NOTICE_MIN_SECONDS is shown again afterwards.
+type Notice = { title: string, detail: string, color: Color3 }
+local NOTICE_MIN_SECONDS = 1
+local notices: { Notice } = {}
+local showingNotice: { notice: Notice, at: number }? = nil
+local pumpNotices: () -> ()
+
 -- Shows whatever is in the toast labels, then fades it out after CATCH_TOAST_TIME.
-playToast = function()
+-- `notice` is set when the toast is showing a queued notice.
+playToast = function(notice: Notice?)
+	local current = showingNotice
+	if current and os.clock() - current.at < NOTICE_MIN_SECONDS then
+		table.insert(notices, 1, current.notice) -- cut short: show it again later
+	end
+	showingNotice = if notice then { notice = notice, at = os.clock() } else nil
 	-- Stop the previous toast's fade, or it would keep fading this one out.
 	for _, tween in toastFades do
 		tween:Cancel()
@@ -369,6 +383,8 @@ playToast = function()
 		task.delay(0.4, function()
 			if toastShownAt == shownAt then
 				toastFrame.Visible = false
+				showingNotice = nil
+				pumpNotices()
 			end
 		end)
 	end)
@@ -385,6 +401,28 @@ function HighlightController.ShowSold(speciesId: string, cash: number)
 	toastDetail.Text = `+${Format.number(cash)}`
 	toastSold.Visible = false
 	playToast()
+end
+
+-- Shows the next queued notice if the toast is free.
+pumpNotices = function()
+	if toastFrame.Visible then
+		return
+	end
+	local notice = table.remove(notices, 1)
+	if notice == nil then
+		return
+	end
+	toastTitle.Text = notice.title
+	toastTitle.TextColor3 = notice.color
+	toastDetail.Text = notice.detail
+	toastSold.Visible = false
+	playToast(notice)
+end
+
+-- A short notice in the same toast (e.g. "New ball unlocked!"), shown once the toast is free.
+function HighlightController.ShowNotice(title: string, detail: string, color: Color3)
+	table.insert(notices, { title = title, detail = detail, color = color })
+	pumpNotices()
 end
 
 local function forgetOld()
@@ -489,7 +527,8 @@ function HighlightController.Init()
 	toastFrame = Instance.new("Frame")
 	toastFrame.Name = "CatchToast"
 	toastFrame.AnchorPoint = Vector2.new(0.5, 1)
-	toastFrame.Position = UDim2.new(0.5, 0, 1, -(UILayout.BOTTOM_BAR + 8)) -- just above the hotbar
+	-- Above the hotbar and the Mascots / Shop buttons, so it never hides them.
+	toastFrame.Position = UDim2.new(0.5, 0, 1, -(UILayout.BOTTOM_BAR + 8 + UILayout.PANEL_BUTTON.Y + 8))
 	toastFrame.Size = UDim2.fromScale(0.44, 0.17) -- narrow enough to clear SWING on small phones
 	toastFrame.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
 	toastFrame.BackgroundTransparency = 1

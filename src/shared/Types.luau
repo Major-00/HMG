@@ -32,6 +32,7 @@ export type PlayerData = {
 	},
 	balls: {
 		owned: { [string]: boolean }, -- every hit uses the best ball owned
+		notified: { [string]: boolean }, -- "New ball unlocked" notice already shown this run
 	},
 	park: { [string]: number }, -- upgrade id -> level (0 = not bought)
 	highestBiome: number, -- furthest biome index reached this run

@@ -18,8 +18,9 @@ Remotes.Events = {
 -- Client -> Server (RemoteFunction, returns { ok: boolean, err: string?, ... })
 Remotes.Functions = {
 	"GetData", -- () -> full snapshot of the caller's own save, or nil if it never loaded
-	"BuyBat", -- (batId: string)
-	"EquipBat", -- (batId: string)
+	"BuyBat", -- (batId: string) the next bat in order; equips it
+	"EquipBat", -- (batId: string) a bat you own
+	"BuyBall", -- (ballId: string) the next ball tier in order; Cash only
 	"SellMascot", -- (uid: string) -> { ok, err?, cash?, species? }; refused if locked
 	"LockMascot", -- (uid: string, locked: boolean)
 	"MoveMascot", -- (uid: string, place: "seats" | "hotbar" | "onDeck", slot: number); swaps if taken
@@ -34,6 +35,7 @@ Remotes.ServerEvents = {
 	"HitResult", -- { hitId, powerGained, pitcherBonus, segments: {FlightSegment}, distance, biomeIndex, catch: HookTypes.Catch? }
 	"Highlight", -- HookTypes.Highlight without the player field
 	"DataChanged", -- { [topLevelKey]: newValue } for keys changed since the last frame
+	"ShopNotice", -- { kind = "ball", id }: your Cash first covers this ball (once per tier per run)
 }
 
 local FOLDER_NAME = "Remotes"

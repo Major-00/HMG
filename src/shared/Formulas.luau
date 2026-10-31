@@ -7,7 +7,7 @@ local HookTypes = require(script.Parent.HookTypes)
 local Tuning = require(Config.Tuning)
 local Balls = require(Config.Balls)
 local Biomes = require(Config.Biomes)
-local Bats = require(Config.Bats) :: any
+local Bats = require(Config.Bats)
 local Mascots = require(Config.Mascots)
 local Stadium = require(Config.Stadium)
 
@@ -21,8 +21,8 @@ end
 -- A player's total Power multiplier from their save: bat x stadium tier x pitcher bonus.
 -- Shared so the client can predict a hit exactly (boosts join the product when they exist).
 function Formulas.multiplier(data: any, pitcherBonus: number): number
-	local bat = Bats[data.bats.equipped]
-	local batMultiplier = if bat and bat.powerMultiplier then bat.powerMultiplier else 1
+	local bat = Bats.ById[data.bats.equipped]
+	local batMultiplier = if bat then bat.powerMultiplier else 1
 	return batMultiplier * Formulas.stadiumTier(data).powerMultiplier * pitcherBonus
 end
 
@@ -119,6 +119,32 @@ function Formulas.biomeNameAt(distance: number, world: number?): string
 end
 
 -- MASCOT CATCH -------------------------------------------------------------------------------
+
+-- The next ball tier to buy: the first one in Config/Balls order the save doesn't own (balls
+-- are bought in order), or nil when every tier is owned.
+function Formulas.nextBall(data: any): Balls.Ball?
+	for _, ball in Balls do
+		if not data.balls.owned[ball.id] then
+			return ball
+		end
+	end
+	return nil
+end
+
+-- Each rarity's total chance (0..1) from catchOdds, for showing a ball's odds.
+function Formulas.rarityOdds(
+	world: number,
+	ballId: string,
+	biomeIndex: number,
+	distance: number,
+	luckMult: number?
+): { [string]: number }
+	local out = {}
+	for _, entry in Formulas.catchOdds(world, ballId, biomeIndex, distance, luckMult) do
+		out[entry.rarity] = (out[entry.rarity] or 0) + entry.chance
+	end
+	return out
+end
 
 -- The best ball the save owns (the last one in Config/Balls order).
 function Formulas.bestBall(data: any): Balls.Ball

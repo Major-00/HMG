@@ -1,7 +1,7 @@
 --!strict
--- ParkController: draws the Mascots seated in every lane's ballpark (from the lane model's
--- "Seats" attribute, published by the server's ParkService), so you see your park and everyone
--- else's. Display only.
+-- ParkController: draws every lane's ballpark: the seated Mascots (the lane model's "Seats"
+-- attribute) and the park upgrade props (its "Park" attribute, levels), both published by the
+-- server's ParkService, so you see your park and everyone else's. Display only.
 --   * Only seats whose Mascot changed are rebuilt (MascotRig, the simple version).
 --   * Each Mascot has a small Cash/s tag (its own earning, before park and stadium bonuses),
 --     shown only up close.
@@ -20,7 +20,9 @@ local Formulas = require(Shared:WaitForChild("Formulas"))
 local Park = require(Config:WaitForChild("Park"))
 
 local StateController = require(script.Parent.StateController)
-local MascotRig = require(script.Parent.Parent:WaitForChild("Modules"):WaitForChild("MascotRig"))
+local Modules = script.Parent.Parent:WaitForChild("Modules")
+local MascotRig = require(Modules:WaitForChild("MascotRig"))
+local ParkProps = require(Modules:WaitForChild("ParkProps"))
 
 local player = Players.LocalPlayer
 
@@ -30,11 +32,18 @@ type SeatView = {
 	base: CFrame, -- where the Mascot stands on this seat
 }
 
+type PropView = {
+	level: number,
+	model: Model?,
+	base: CFrame, -- where the upgrade stands, facing the field
+}
+
 type ParkView = {
 	model: Model,
 	center: Vector3,
-	folder: Folder, -- holds this park's Mascots; parented only while near the camera
+	folder: Folder, -- holds this park's Mascots and upgrade props; parented only while near the camera
 	seats: { SeatView },
+	props: { PropView }, -- one per park upgrade, in Config/Park order
 }
 
 local ParkController = {}
@@ -98,6 +107,29 @@ local function refresh(view: ParkView)
 	end
 end
 
+-- Park upgrade props from the lane's "Park" attribute (levels in Config/Park order).
+-- Only upgrades whose level changed are rebuilt.
+local function refreshProps(view: ParkView)
+	local encoded = view.model:GetAttribute("Park")
+	local levels = if type(encoded) == "string" then string.split(encoded, ",") else {}
+	for i, upgrade in Park.Upgrades do
+		local prop = view.props[i]
+		local level = math.clamp(math.floor(tonumber(levels[i]) or 0), 0, Park.MAX_LEVEL)
+		if prop and prop.level ~= level then
+			prop.level = level
+			if prop.model then
+				prop.model:Destroy()
+				prop.model = nil
+			end
+			local model = ParkProps.Build(upgrade.id, level, prop.base)
+			if model then
+				model.Parent = view.folder
+				prop.model = model
+			end
+		end
+	end
+end
+
 local function addLane(model: Instance)
 	if not model:IsA("Model") or parks[model] then
 		return
@@ -110,17 +142,27 @@ local function addLane(model: Instance)
 	end
 	local folder = Instance.new("Folder")
 	folder.Name = model.Name
-	local view: ParkView = { model = model, center = floor.Position, folder = folder, seats = {} }
+	local view: ParkView = { model = model, center = floor.Position, folder = folder, seats = {}, props = {} }
 	for i = 1, Park.Layout.SEAT_COUNT do
 		local pad = seatsFolder:WaitForChild(`Seat{i}`, 10)
 		local spot = pad and pad:FindFirstChild("Spot")
 		local base = if spot and spot:IsA("Attachment") then spot.WorldCFrame else floor.CFrame
 		view.seats[i] = { key = "", rig = nil, base = base }
 	end
+	for i in Park.Upgrades do
+		local spot = floor:FindFirstChild(`Upgrade{i}`)
+		local at = if spot and spot:IsA("Attachment") then spot.WorldPosition else floor.Position
+		at = Vector3.new(at.X, floor.Position.Y + floor.Size.Y / 2, at.Z)
+		view.props[i] = { level = 0, model = nil, base = CFrame.lookAt(at, at + Vector3.zAxis) }
+	end
 	parks[model] = view
 	refresh(view)
+	refreshProps(view)
 	model:GetAttributeChangedSignal("Seats"):Connect(function()
 		refresh(view)
+	end)
+	model:GetAttributeChangedSignal("Park"):Connect(function()
+		refreshProps(view)
 	end)
 	model.Destroying:Connect(function()
 		folder:Destroy()

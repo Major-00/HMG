@@ -9,6 +9,7 @@ local Balls = require(Config.Balls)
 local Biomes = require(Config.Biomes)
 local Bats = require(Config.Bats)
 local Mascots = require(Config.Mascots)
+local Park = require(Config.Park)
 local Stadium = require(Config.Stadium)
 
 local Formulas = {}
@@ -287,9 +288,23 @@ end
 
 -- INCOME ------------------------------------------------------------------------------------
 
--- The park's Cash multiplier from its upgrades. 1 until the park upgrade step adds them.
-function Formulas.parkMultiplier(_data: any): number
-	return 1
+-- The park's Cash multiplier from its upgrades: 1 + each upgrade's level x its bonus per level.
+function Formulas.parkMultiplier(data: any): number
+	local multiplier = 1
+	for _, upgrade in Park.Upgrades do
+		local level = math.clamp(data.park[upgrade.id] or 0, 0, Park.MAX_LEVEL)
+		multiplier += level * upgrade.bonusPerLevel
+	end
+	return multiplier
+end
+
+-- Cash for the next level of a park upgrade when it's at `level`, or nil at the max level.
+function Formulas.parkUpgradeCost(upgradeId: string, level: number): number?
+	local upgrade = Park.UpgradeById[upgradeId]
+	if upgrade == nil or level >= Park.MAX_LEVEL then
+		return nil
+	end
+	return math.floor(upgrade.baseCost * upgrade.costGrowth ^ level)
 end
 
 -- Cash per second the player earns: seated Mascots only (hotbar and On Deck don't earn),

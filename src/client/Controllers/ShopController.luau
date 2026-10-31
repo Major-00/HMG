@@ -6,7 +6,9 @@
 --     ball you own is used on every hit. Cash only.
 --   Bats: each tier with its Power multiplier. Buy the next one (it's equipped), or equip any
 --     bat you own.
--- The server checks and charges every purchase (BallService, BatService); this only asks.
+--   Park: the five park upgrades (Config/Park) with their level, bonus and next cost; each level
+--     raises your park's Cash rate.
+-- The server checks and charges every purchase (BallService, BatService, ParkService); this only asks.
 -- It also shows the server's one-time "New ball unlocked" notice, and the Shop button glows
 -- until you open the shop.
 
@@ -20,6 +22,7 @@ local Bats = require(Config:WaitForChild("Bats"))
 local Format = require(Shared:WaitForChild("Format"))
 local Formulas = require(Shared:WaitForChild("Formulas"))
 local Mascots = require(Config:WaitForChild("Mascots"))
+local Park = require(Config:WaitForChild("Park"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local HighlightController = require(script.Parent.HighlightController)
@@ -34,7 +37,7 @@ local SHOP_COLOR = Color3.fromRGB(200, 150, 50)
 
 local ShopController = {}
 
-type Tab = "balls" | "bats"
+type Tab = "balls" | "bats" | "park"
 type Row = { frame: Frame, signature: string }
 
 local panel: Frame
@@ -42,6 +45,7 @@ local list: ScrollingFrame
 local note: TextLabel
 local ballsTab: TextButton
 local batsTab: TextButton
+local parkTab: TextButton
 local openButton: TextButton
 local tab: Tab = "balls"
 local shownTab: Tab? = nil
@@ -235,6 +239,37 @@ local function batRow(data: any, bat: Bats.Bat, order: number, next: Bats.Bat?):
 	return { frame = frame, signature = signature }
 end
 
+local function parkRow(data: any, upgrade: Park.Upgrade, order: number): Row
+	local level = data.park[upgrade.id] or 0
+	local cost = Formulas.parkUpgradeCost(upgrade.id, level)
+	local canBuy = cost ~= nil and data.cash >= cost
+	local frame = rowFrame(upgrade.id, order)
+	text(frame, {
+		Name = "UpgradeName",
+		Text = `{upgrade.displayName}  Lv {level}/{Park.MAX_LEVEL}`,
+		Position = UDim2.fromOffset(12, 5),
+		Size = UDim2.new(0.62, -12, 0, 22),
+	})
+	text(frame, {
+		Name = "Bonus",
+		Text = `+{math.floor(upgrade.bonusPerLevel * 100 + 0.5)}% Cash/s per level`,
+		Font = Enum.Font.Gotham,
+		Position = UDim2.fromOffset(12, 32),
+		Size = UDim2.new(0.62, -12, 0, 20),
+	})
+	if cost == nil then
+		actionButton(frame, "MAX", Color3.fromRGB(60, 150, 90), false)
+	else
+		local b = actionButton(frame, `Buy ${Format.number(cost)}`, SHOP_COLOR, canBuy)
+		if canBuy then
+			b.Activated:Connect(function()
+				buy("BuyParkUpgrade", upgrade.id)
+			end)
+		end
+	end
+	return { frame = frame, signature = `{level}:{canBuy}` }
+end
+
 local function redraw(force: boolean?)
 	local data = StateController.Get()
 	if data == nil or not panel.Visible then
@@ -246,10 +281,18 @@ local function redraw(force: boolean?)
 	batsTab.BackgroundColor3 = if tab == "bats"
 		then Color3.fromRGB(70, 110, 200)
 		else Color3.fromRGB(50, 56, 70)
+	parkTab.BackgroundColor3 = if tab == "park"
+		then Color3.fromRGB(70, 110, 200)
+		else Color3.fromRGB(50, 56, 70)
 	local world, biome, distance = oddsPlace(data)
-	note.Text = if tab == "balls"
-		then `Odds at your best hit: {Format.number(distance)} studs, {Formulas.biomes(world)[biome].displayName}`
-		else `Cash: ${Format.number(data.cash)}`
+	if tab == "balls" then
+		note.Text =
+			`Odds at your best hit: {Format.number(distance)} studs, {Formulas.biomes(world)[biome].displayName}`
+	elseif tab == "park" then
+		note.Text = `Park bonus: ×{math.floor(Formulas.parkMultiplier(data) * 100 + 0.5) / 100} Cash/s`
+	else
+		note.Text = `Cash: ${Format.number(data.cash)}`
+	end
 
 	if force or shownTab ~= tab then
 		for _, row in rows do
@@ -278,6 +321,14 @@ local function redraw(force: boolean?)
 			place(i, function()
 				return ballRow(data, ball, i, next, best)
 			end, `{owned}:{isNext}:{canBuy}:{ball.id == best.id}:{world}:{biome}:{distance}`)
+		end
+	elseif tab == "park" then
+		for i, upgrade in Park.Upgrades do
+			local level = data.park[upgrade.id] or 0
+			local cost = Formulas.parkUpgradeCost(upgrade.id, level)
+			place(i, function()
+				return parkRow(data, upgrade, i)
+			end, `{level}:{cost ~= nil and data.cash >= cost}`)
 		end
 	else
 		local next = nextBat(data)
@@ -323,18 +374,23 @@ function ShopController.Init()
 	ballsTab = button(panel, "Balls", Color3.fromRGB(70, 110, 200), {
 		Name = "BallsTab",
 		Position = UDim2.fromOffset(8, 8),
-		Size = UDim2.new(0.38, -8, 0, BUTTON_H),
+		Size = UDim2.new(0.27, -8, 0, BUTTON_H),
 	})
 	batsTab = button(panel, "Bats", Color3.fromRGB(50, 56, 70), {
 		Name = "BatsTab",
-		Position = UDim2.new(0.38, 4, 0, 8),
-		Size = UDim2.new(0.38, -8, 0, BUTTON_H),
+		Position = UDim2.new(0.27, 4, 0, 8),
+		Size = UDim2.new(0.27, -8, 0, BUTTON_H),
+	})
+	parkTab = button(panel, "Park", Color3.fromRGB(50, 56, 70), {
+		Name = "ParkTab",
+		Position = UDim2.new(0.54, 0, 0, 8),
+		Size = UDim2.new(0.27, -8, 0, BUTTON_H),
 	})
 	local close = button(panel, "X", Color3.fromRGB(90, 60, 60), {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -8, 0, 8),
-		Size = UDim2.new(0.2, -8, 0, BUTTON_H),
+		Size = UDim2.new(0.19, -8, 0, BUTTON_H),
 	})
 	note = text(panel, {
 		Name = "Note",
@@ -388,13 +444,24 @@ function ShopController.Init()
 		tab = "bats"
 		redraw(true)
 	end)
+	parkTab.Activated:Connect(function()
+		tab = "park"
+		redraw(true)
+	end)
 
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 end
 
 function ShopController.Start()
 	StateController.Changed:Connect(function(key: string)
-		if key == "cash" or key == "balls" or key == "bats" or key == "lifetime" or key == "stadiumTier" then
+		if
+			key == "cash"
+			or key == "balls"
+			or key == "bats"
+			or key == "park"
+			or key == "lifetime"
+			or key == "stadiumTier"
+		then
 			redraw()
 		end
 	end)

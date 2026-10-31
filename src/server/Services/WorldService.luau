@@ -110,7 +110,7 @@ local function buildPlot(lane: Model, origin: Vector3)
 	-- Behind the back row and above everyone's heads, so it never covers a Mascot.
 	local sign = Instance.new("BillboardGui")
 	sign.Name = "OwnerSign"
-	sign.Size = UDim2.fromOffset(220, 48)
+	sign.Size = UDim2.fromScale(9, 1.8) -- in studs, so it shrinks with distance like the park
 	sign.StudsOffset = Vector3.new(0, L.SIGN_HEIGHT / 2 + 1.5, 0)
 	sign.MaxDistance = 120
 	sign.LightInfluence = 0
@@ -243,6 +243,7 @@ local function releaseLane(player: Player)
 		local model = laneModels[lane]
 		model:SetAttribute("Owner", nil)
 		model:SetAttribute("Seats", nil) -- empties the park for everyone
+		model:SetAttribute("Park", nil)
 		setOwnerSign(lane, "Open ballpark")
 	end
 end
@@ -324,6 +325,14 @@ function WorldService.SetParkSeats(player: Player, encoded: string)
 	local lane = playerLane[player]
 	if lane and laneOwner[lane] == player then
 		laneModels[lane]:SetAttribute("Seats", encoded)
+	end
+end
+
+-- Publishes a player's park upgrade levels (see ParkService) on their lane model. Display only.
+function WorldService.SetParkLevels(player: Player, encoded: string)
+	local lane = playerLane[player]
+	if lane and laneOwner[lane] == player then
+		laneModels[lane]:SetAttribute("Park", encoded)
 	end
 end
 

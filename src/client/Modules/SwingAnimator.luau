@@ -30,11 +30,11 @@ local SwingData = require(script.Parent:WaitForChild("SwingData"))
 local player = Players.LocalPlayer
 
 local MOVING = 0.1 -- MoveDirection magnitude that counts as walking
-local CARRY_FADE = 0.2
-local SWING_FADE = 0.05 -- blend into a swing (short: contact must land on time)
-local CUT_FADE = 0.15 -- a follow-through cut short by walking or a new toss
+local CARRY_FADE = 0.3
+local SWING_FADE = 0.12 -- blend into a swing (the toss starts slowly, so contact still lands on time)
+local CUT_FADE = 0.2 -- a follow-through cut short by walking or a new toss
 local HOLD_AFTER_CAMERA = 1.2 -- seconds the finish pose stays once the camera is back
-local RELEASE_FADE = 0.4 -- back to the stance after the hold
+local RELEASE_FADE = 0.6 -- settle back into the stance after the hold
 
 type Handlers = { release: () -> (), contact: () -> () }
 

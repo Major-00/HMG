@@ -155,7 +155,12 @@ HMG/
 by hand. Each pose is a few readable numbers (hands, bat direction, feet, hips, where the head
 looks) in the batter's own frame; the script solves the joints (legs reach planted feet, both
 arms reach the bat, the head aims) and bakes every swing at 30 frames a second so hands stay on
-the bat and feet stay planted between poses. It reads `Fungo.CONTACT_AT` and each tier's
+the bat and feet stay planted between poses. Between the beats every pose value follows a
+smooth spline (it only stops where a key says "stop": the stance, the held finish; it never
+overshoots, so planted feet don't drift), the swing keys carry their speed so the bat
+accelerates into contact and out of the hit-stop, and the upper body and head trail the hips a
+little (overlapping action) while the bat, hands and feet stay exact. The toss ball flies a real
+gravity arc (FungoController). It reads `Fungo.CONTACT_AT` and each tier's
 `hitStop` from Tuning, so the `Contact` marker always sits at `CONTACT_AT - hitStop`. It also
 writes `src/client/Modules/SwingData.luau` (marker times and each tier's contact point). Run
 `python3 tools/animations/generate.py` after changing poses or those Tuning numbers.

@@ -154,8 +154,16 @@ local function playToss(
 	arriveAt: number,
 	launchAt: number
 )
-	local apex = strike + Vector3.new(0, height, 0)
-	local rise = (arriveAt - startAt) * Tuning.Fungo.TOSS_RISE
+	-- A real throw under gravity: it leaves the hand, peaks `height` above the strike point and
+	-- lands on it exactly at `arriveAt`. Solve the gravity and launch speed that do that:
+	--   peak above the hand  A = strike.Y + height - hand.Y = v^2 / (2g)
+	--   drop at the end      B = strike.Y - hand.Y          = v T - g T^2 / 2
+	local flight = math.max(arriveAt - startAt, 0.05)
+	local above = math.max(strike.Y + height - hand.Y, 0.1)
+	local drop = strike.Y - hand.Y
+	local root = (math.sqrt(2 * above) + math.sqrt(math.max(2 * (above - drop), 0))) / flight
+	local gravity = root * root
+	local up = math.sqrt(2 * gravity * above)
 	tossBall.Position = hand
 	tossBall.Transparency = 0
 	local connection: RBXScriptConnection
@@ -166,13 +174,10 @@ local function playToss(
 			tossBall.Transparency = 1
 			return
 		end
-		local t = now - startAt
-		if t < rise then
-			local a = t / rise
-			tossBall.Position = hand:Lerp(apex, 1 - (1 - a) * (1 - a)) -- ease out going up
-		elseif now < arriveAt then
-			local a = (t - rise) / math.max(arriveAt - startAt - rise, 0.001)
-			tossBall.Position = apex:Lerp(strike, a * a) -- ease in coming down
+		if now < arriveAt then
+			local t = math.max(now - startAt, 0)
+			local flat = hand:Lerp(strike, t / flight)
+			tossBall.Position = Vector3.new(flat.X, hand.Y + up * t - gravity * t * t / 2, flat.Z)
 		else
 			tossBall.Position = holdAt or strike -- hit-stop: frozen on the bat
 		end

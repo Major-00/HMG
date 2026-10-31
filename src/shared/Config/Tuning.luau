@@ -138,7 +138,6 @@ local Tuning = {
 			},
 		},
 		CYCLE = 1.2, -- seconds from the tap to the end of the swing; the same at every tier
-		TOSS_RISE = 0.55, -- share of the toss spent going up
 		STRIKE_FORWARD = 2.5, -- studs in front of the batter where the ball is hit
 		STRIKE_SIDE = 0.8, -- ... and this far to the batter's right
 

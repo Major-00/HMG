@@ -486,15 +486,17 @@ FEET_BACK = (1.2, 0.05)
 LOOK_FIELD = (-12, 1.5, -3)
 
 
-def stance(breath=0.0, sway=0.0):
+def stance(breath=0.0, sway=0.0, waggle=0.0):
+    """Bat on the shoulder. breath lifts the chest and hands; sway shifts the weight; waggle
+    rocks the bat a little."""
     return {
         "root": (0.05 + sway, -0.3 - breath * 0.3, 0),
-        "hips": (-5, 4, 0),
-        "waist": (-12, 8 + breath * 6, 0),
+        "hips": (-5 + sway * 20, 4, 0),
+        "waist": (-12 - sway * 25, 8 + breath * 6, 0),
         "front": {"at": FEET_FRONT, "yaw": -15},
         "back": {"at": FEET_BACK, "yaw": 5},
-        "grip": (0.45, 0.35 + breath * 0.5, -0.95),
-        "bat": (0.45, 0.62, 0.64),
+        "grip": (0.45 + waggle * 0.05, 0.35 + breath * 0.5, -0.95),
+        "bat": (0.45 + waggle * 0.25, 0.62, 0.64 - waggle * 0.15),
         "batUp": (0.4, 0.5, -1),
         "look": LOOK_FIELD,
     }
@@ -569,6 +571,22 @@ def load_pose(tier):
         "bat": (0.25, 0.78, 0.6),
         "batUp": (0.4, 0.3, -1),
         "look": above_ball(1.6),
+    }
+
+
+def launch_pose(tier):
+    """Hips open, hands dropping into the slot, the bat still lagging behind: the swing builds
+    speed from here into contact."""
+    return {
+        "root": (-0.12, -0.5, 0),
+        "hips": (tier["fire"] * 0.8, 7, 0),
+        "waist": (-tier["fire"] * 0.3 - 4, 12, -2),
+        "front": {"at": (-1.45, 0.0), "yaw": 0},
+        "back": {"at": FEET_BACK, "yaw": 12, "toe": 4, "knee": (-0.4, 0, -1)},
+        "grip": (0.25, -0.25, -0.9),
+        "bat": (0.82, 0.18, 0.55),
+        "batUp": (0.2, 1, -0.3),
+        "look": above_ball(0.15),
     }
 
 
@@ -725,53 +743,162 @@ def lerp(a, b, t):
     return tuple(i + (j - i) * t for i, j in zip(a, b))
 
 
-def blend(a, b, t):
-    out = {}
-    for key in ("root", "hips", "waist", "grip", "look", "rightElbow", "leftElbow", "spin"):
-        out[key] = lerp(a[key], b[key], t)
-    for key in ("bat", "batUp"):
-        out[key] = unit(lerp(unit(a[key]), unit(b[key]), t))
+# A resolved spec flattened to numbers, so poses can be splined; directions and the left hand's
+# rotation are renormalised on the way back.
+VEC3 = ("root", "hips", "waist", "grip", "look", "rightElbow", "leftElbow")
+DIRS = ("bat", "batUp")
+
+
+def flatten(p):
+    v = []
+    for key in VEC3:
+        v += list(p[key])
+    v.append(p["spin"])
+    for key in DIRS:
+        v += list(unit(p[key]))
     for key in ("front", "back"):
-        fa, fb = a[key], b[key]
-        out[key] = {k: lerp(fa[k], fb[k], t) for k in ("at", "lift", "yaw", "toe")}
-        out[key]["knee"] = unit(lerp(unit(fa["knee"]), unit(fb["knee"]), t))
-    la, lb = a["left"], b["left"]
-    out["left"] = {"at": lerp(la["at"], lb["at"], t), "rotm": slerp_mat(la["rotm"], lb["rotm"], t)}
-    if la["bat"] and lb["bat"]:
-        out["left"] = "bat"
+        f = p[key]
+        v += list(f["at"]) + [f["lift"], f["yaw"], f["toe"]] + list(unit(f["knee"]))
+    v += list(p["left"]["at"]) + list(quat_from(p["left"]["rotm"]))
+    return v
+
+
+def unflatten(v, left_on_bat):
+    out, i = {}, 0
+    for key in VEC3:
+        out[key] = tuple(v[i:i + 3])
+        i += 3
+    out["spin"] = v[i]
+    i += 1
+    for key in DIRS:
+        out[key] = unit(tuple(v[i:i + 3]))
+        i += 3
+    for key in ("front", "back"):
+        out[key] = {"at": tuple(v[i:i + 2]), "lift": v[i + 2], "yaw": v[i + 3], "toe": v[i + 4],
+                    "knee": unit(tuple(v[i + 5:i + 8]))}
+        i += 8
+    q = v[i + 3:i + 7]
+    n = math.sqrt(sum(c * c for c in q)) or 1
+    out["left"] = "bat" if left_on_bat else {"at": tuple(v[i:i + 3]), "rotm": mat_from(tuple(c / n for c in q))}
     return out
 
 
-def ease(style, t):
-    if style == "in":  # speeding up (into contact)
-        return t * t
-    if style == "out":  # slowing down
-        return 1 - (1 - t) * (1 - t)
-    if style == "hold":
-        return 0.0
-    return t * t * (3 - 2 * t)  # smooth
+def align_quats(vectors):
+    """Keep each key's left-hand quaternion on the same side as the one before (q == -q)."""
+    for k in range(1, len(vectors)):
+        a, b = vectors[k - 1][-4:], vectors[k][-4:]
+        if sum(x * y for x, y in zip(a, b)) < 0:
+            vectors[k][-4:] = [-x for x in b]
 
 
-def bake(keys, label, rate=BAKE_RATE):
-    """keys: [(time, spec, markers, ease to next)]. Returns frames for write_kfs, and the solved
-    contact point of the key that has the "Contact" marker."""
-    keys = [(t, resolve_spec(sp), m, e) for t, sp, m, e in keys]
+def tangents(times, values, styles, loop):
+    """Per-key slopes for a monotone cubic spline (no overshoot, so planted feet never drift).
+    "stop" keys have zero slope; a "hold" segment keeps its pose; around a hold the slope is
+    one-sided so the motion keeps its speed into the hit-stop."""
+    n = len(times)
+    dims = len(values[0])
+    out = []
+    for i in range(n):
+        if styles[i] == "stop" or (not loop and (i == 0 or i == n - 1)):
+            out.append([0.0] * dims)
+            continue
+        prev_i = i - 1 if i > 0 else n - 2
+        next_i = i + 1 if i < n - 1 else 1
+        t_prev = times[prev_i] - (times[-1] - times[0] if i == 0 else 0)
+        t_next = times[next_i] + (times[-1] - times[0] if i == n - 1 else 0)
+        dt0, dt1 = times[i] - t_prev, t_next - times[i]
+        holding_out = styles[i] == "hold"
+        holding_in = styles[prev_i] == "hold" and prev_i == i - 1
+        m = []
+        for c in range(dims):
+            d0 = (values[i][c] - values[prev_i][c]) / dt0
+            d1 = (values[next_i][c] - values[i][c]) / dt1
+            if holding_out:
+                m.append(2 * d0)  # still speeding up at the hit-stop (bat speed peaks at contact)
+            elif holding_in:
+                m.append(1.5 * d1)  # out of the hit-stop at speed, then slowing
+            elif styles[i] == "fast":
+                # Through the swing: carry the speed (a plain weighted average, no braking at
+                # turning points); feet that don't move have zero slope anyway.
+                m.append((d0 * dt1 + d1 * dt0) / (dt0 + dt1))
+            elif d0 * d1 <= 0:
+                m.append(0.0)  # a turning point: stop here rather than overshoot
+            else:
+                avg = (d0 * dt1 + d1 * dt0) / (dt0 + dt1)
+                limit = 3 * min(abs(d0), abs(d1))
+                m.append(math.copysign(min(abs(avg), limit), avg))
+        out.append(m)
+    return out
+
+
+def hermite(p0, p1, m0, m1, dt, u):
+    u2, u3 = u * u, u * u * u
+    h00, h10, h01, h11 = 2 * u3 - 3 * u2 + 1, u3 - 2 * u2 + u, -2 * u3 + 3 * u2, u3 - u2
+    return [h00 * a + h10 * dt * ma + h01 * b + h11 * dt * mb for a, b, ma, mb in zip(p0, p1, m0, m1)]
+
+
+# Overlapping action: the upper body turns a moment after the hips, the head a moment after
+# that. The bat, hands and feet are never delayed, so contact and planted feet stay exact.
+WAIST_LAG = 0.035
+LOOK_LAG = 0.07
+
+
+def bake(keys, label, rate=BAKE_RATE, loop=False):
+    """keys: [(time, spec, markers, style)], style "auto" | "stop" | "hold" (keep this pose to
+    the next key). Splines every pose field through the keys and solves a pose `rate` times a
+    second (plus every key). Returns frames for write_kfs and the solved contact point of the
+    key with the "Contact" marker."""
+    times = [k[0] for k in keys]
+    specs = [resolve_spec(k[1]) for k in keys]
+    styles = [k[3] for k in keys]
+    vectors = [flatten(sp) for sp in specs]
+    align_quats(vectors)
+    slopes = tangents(times, vectors, styles, loop)
+    on_bat = [sp["left"].get("bat", False) for sp in specs]
+
+    def sample(t):
+        if loop:
+            span = times[-1] - times[0]
+            t = times[0] + (t - times[0]) % span
+        t = max(times[0], min(times[-1], t))
+        i = 0
+        while i < len(times) - 2 and t > times[i + 1]:
+            i += 1
+        dt = times[i + 1] - times[i]
+        u = 0 if dt <= 0 else (t - times[i]) / dt
+        if styles[i] == "hold":
+            return vectors[i], on_bat[i]
+        v = hermite(vectors[i], vectors[i + 1], slopes[i], slopes[i + 1], dt, u)
+        return v, (on_bat[i] and on_bat[i + 1]) or (u < 0.5 and on_bat[i] and not on_bat[i + 1]) or (
+            u >= 0.5 and on_bat[i + 1] and not on_bat[i])
+
+    def pose_at(t):
+        v, bat = sample(t)
+        spec = unflatten(v, bat)
+        lag_w = unflatten(sample(t - WAIST_LAG)[0], bat)
+        lag_l = unflatten(sample(t - LOOK_LAG)[0], bat)
+        if not loop and t - WAIST_LAG < times[0]:
+            lag_w = spec
+        if not loop and t - LOOK_LAG < times[0]:
+            lag_l = spec
+        spec["waist"] = lag_w["waist"]
+        spec["look"] = lag_l["look"]
+        return spec
+
+    sample_times = set(times)
+    t = times[0]
+    while t < times[-1] - 1e-6:
+        sample_times.add(round(t, 4))
+        t += 1 / rate
     frames, contact = [], None
     linear = ("Linear", "In")
-    for i, (t0, a, markers, style) in enumerate(keys):
-        transforms, point = solve(a, f"{label} @{t0:.3f}")
+    marker_at = {k[0]: k[2] for k in keys}
+    for t in sorted(sample_times):
+        markers = marker_at.get(t, [])
+        transforms, point = solve(pose_at(t), f"{label} @{t:.3f}")
         if "Contact" in markers:
             contact = point
-        frames.append((t0, transforms, markers, linear))
-        if i + 1 == len(keys):
-            break
-        t1, b = keys[i + 1][0], keys[i + 1][1]
-        steps = max(1, round((t1 - t0) * rate))
-        for n in range(1, steps):
-            u = n / steps
-            spec = blend(a, b, ease(style, u))
-            transforms, _ = solve(spec, f"{label} @{t0 + (t1 - t0) * u:.3f}")
-            frames.append((t0 + (t1 - t0) * u, transforms, [], linear))
+        frames.append((t, transforms, markers, linear))
     return frames, contact
 
 
@@ -781,9 +908,11 @@ def main():
 
     # Stance: idle loop, whole body, Idle priority. The default walk and jump are Core priority
     # (below Idle), so SwingAnimator stops the stance while moving or in the air.
-    frames, _ = bake([(0, stance(), [], "smooth"), (1.2, stance(breath=1, sway=0.05), [], "smooth"),
-                      (2.2, stance(breath=0.3, sway=-0.04), [], "smooth"), (3.2, stance(), [], "smooth")], "Stance",
-                     rate=4)
+    frames, _ = bake([(0, stance(), [], "auto"),
+                      (0.8, stance(breath=0.6, sway=0.03, waggle=1), [], "auto"),
+                      (1.6, stance(breath=1, sway=0.05, waggle=-0.4), [], "auto"),
+                      (2.4, stance(breath=0.4, sway=-0.03, waggle=0.8), [], "auto"),
+                      (3.2, stance(), [], "auto")], "Stance", rate=6, loop=True)
     write_kfs("FungoStance", frames, True, "Idle", ALL_PARTS)
 
     # Carry: walking with the bat on the shoulder, upper body only (the walk drives the legs).
@@ -799,8 +928,8 @@ def main():
             "look": r2b((0, 1.2, -10)),
         }
 
-    frames, _ = bake([(0, carry(0), [], "smooth"), (0.9, carry(0.05), [], "smooth"), (1.8, carry(0), [], "smooth")],
-                     "Carry", rate=4)
+    frames, _ = bake([(0, carry(0), [], "auto"), (0.9, carry(0.05), [], "auto"), (1.8, carry(0), [], "auto")],
+                     "Carry", rate=6, loop=True)
     write_kfs("FungoCarry", frames, True, "Action", UPPER_BODY)
 
     data_tiers = []
@@ -810,36 +939,39 @@ def main():
         # Toss -> set into the stance while the ball rises -> load as it falls -> plant -> swing.
         t_release = 0.12
         t_set = round(CONTACT_AT * 0.5, 4)
-        t_load = round(CONTACT_AT - 0.3, 4)
-        t_plant = round(t_contact - 0.09, 4)
-        assert t_release < t_set < t_load < t_plant < t_contact, "CONTACT_AT too short for the toss"
+        t_load = round(CONTACT_AT - 0.38, 4)
+        t_plant = round(t_contact - 0.2, 4)
+        t_launch = round(t_contact - 0.1, 4)
+        assert t_release < t_set < t_load < t_plant < t_launch < t_contact, "CONTACT_AT too short for the toss"
         label = tier["name"]
         fin_spec = finish_pose(tier, i)
         keys = [
-            (0.0, stance(), [], "smooth"),
-            (t_release, toss_pose(tier), ["Release"], "out"),
-            (t_set, set_pose(tier), [], "smooth"),
-            (t_load, load_pose(tier), [], "smooth"),
-            (t_plant, plant_pose(tier), [], "in"),
-            (t_contact, contact_pose(tier), ["Contact"], "hold" if h > 0 else "out"),
+            (0.0, stance(), [], "stop"),
+            (t_release, toss_pose(tier), ["Release"], "auto"),
+            (t_set, set_pose(tier), [], "auto"),
+            (t_load, load_pose(tier), [], "auto"),
+            (t_plant, plant_pose(tier), [], "auto"),
+            (t_launch, launch_pose(tier), [], "fast"),
+            (t_contact, contact_pose(tier), ["Contact"], "hold" if h > 0 else "fast"),
         ]
         if h > 0:
-            keys.append((CONTACT_AT, contact_pose(tier), [], "out"))
-        t_wrap = CONTACT_AT + 0.1
-        t_finish = CONTACT_AT + 0.3
-        keys.append((t_wrap, wrap_pose(tier), [], "out"))
+            keys.append((CONTACT_AT, contact_pose(tier), [], "fast"))
+        t_wrap = CONTACT_AT + 0.12
+        t_finish = CONTACT_AT + 0.35
+        keys.append((t_wrap, wrap_pose(tier), [], "fast"))
         if i == 4:
             # Point at the sky, then flip the bat: one turn in the hand, in thirds so it spins
             # the long way round.
-            keys.append((t_finish, fin_spec, [], "smooth"))
+            keys.append((t_finish, fin_spec, [], "auto"))
             for n, spin in enumerate((120, 240, 360), start=1):
-                keys.append((t_finish + 0.1 * n, dict(fin_spec, spin=spin), ["Finish"] if n == 3 else [], "smooth"))
+                keys.append((t_finish + 0.1 * n, dict(fin_spec, spin=spin), ["Finish"] if n == 3 else [],
+                             "stop" if n == 3 else "auto"))
             t_end = t_finish + 0.3
         else:
-            keys.append((t_finish, fin_spec, ["Finish"], "smooth"))
+            keys.append((t_finish, fin_spec, ["Finish"], "stop"))
             t_end = t_finish
         # A tail after Finish, so the held pose is never the track's last instant.
-        keys.append((t_end + 0.25, dict(fin_spec, spin=360 if i == 4 else 0), [], "smooth"))
+        keys.append((t_end + 0.25, dict(fin_spec, spin=360 if i == 4 else 0), [], "stop"))
         frames, contact = bake(keys, label)
         write_kfs(f"FungoSwing{label}", frames, False, "Action4", ALL_PARTS)
         data_tiers.append({"name": f"FungoSwing{label}", "release": t_release, "contact": t_contact,

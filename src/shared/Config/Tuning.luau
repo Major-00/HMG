@@ -127,14 +127,14 @@ local Tuning = {
 		-- assets/Animations plays instead (tools/animations/generate.py makes them); in a live
 		-- server the simple swing plays. swings[i] is Power tier i (TIERS below).
 		ANIMATIONS = {
-			stance = "", -- FungoStance
-			carry = "", -- FungoCarry
+			stance = "rbxassetid://114145299293411", -- FungoStance
+			carry = "rbxassetid://78138491705919", -- FungoCarry
 			swings = {
-				"", -- FungoSwingPop
-				"", -- FungoSwingSolid
-				"", -- FungoSwingCrush
-				"", -- FungoSwingBlast
-				"", -- FungoSwingLaunch
+				"rbxassetid://93493049366580", -- FungoSwingPop
+				"rbxassetid://139857028731839", -- FungoSwingSolid
+				"rbxassetid://97313450383429", -- FungoSwingCrush
+				"rbxassetid://71218713514451", -- FungoSwingBlast
+				"rbxassetid://126617258477960", -- FungoSwingLaunch
 			},
 		},
 		CYCLE = 1.2, -- seconds from the tap to the end of the swing; the same at every tier

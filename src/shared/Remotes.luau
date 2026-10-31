@@ -22,6 +22,7 @@ Remotes.Functions = {
 	"EquipBat", -- (batId: string) a bat you own
 	"BuyBall", -- (ballId: string) the next ball tier in order; Cash only
 	"BuyParkUpgrade", -- (upgradeId: string) the next level of a park upgrade (Config/Park)
+	"Promote", -- () stadium promotion, if the next tier's requirements are met
 	"SellMascot", -- (uid: string) -> { ok, err?, cash?, species? }; refused if locked
 	"LockMascot", -- (uid: string, locked: boolean)
 	"MoveMascot", -- (uid: string, place: "seats" | "hotbar" | "onDeck", slot: number); swaps if taken

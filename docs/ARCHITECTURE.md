@@ -169,7 +169,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/ParkService | Publishes each player's seated Mascots on their lane model (`Seats`: `species,variant,size` per seat, `;`-joined), once per frame when seats change, and its upgrade levels (`Park`). Handles `BuyParkUpgrade`: the next level with Cash, up to 10. |
 | Services/BallService | `BuyBall`: the next ball tier in order, Cash only, permanent for the run. Sends `ShopNotice` once per tier per run when Cash first covers the next ball (`balls.notified`). |
 | Services/BatService | `BuyBat` (the next bat in order, equips it) and `EquipBat` (any bat you own), with Cash. |
-| Services/PromotionService *(stub)* | Stadium promotion: check the requirement, reset run progress, keep every Mascot, raise the tier. |
+| Services/PromotionService | `Promote`: checks the next tier's requirements (`Formulas.promotionStatus`), resets Cash (first), balls, bats, park, Power and biome progress to new-run values, keeps every Mascot, lock and the Index, and raises `stadiumTier`. |
 | Services/HighlightService | **Highlight event.** Biomes reached for the first time this run, record milestones, and (planned) catches that earn a reveal or rare-catch clip. Fires a server Signal and the `Highlight` remote. |
 | Services/ChallengeService | **Per-biome challenge.** Reads each biome's `challenge` slot. Does nothing while all are nil. |
 | Services/WorldService | Builds the batting lanes, pitcher spots and (planned) ballpark plots at startup. |
@@ -205,7 +205,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/IndexController | The Index (third panel button, red dot for unseen species): a ◀ biome ▶ switcher and 8 cards per biome. Caught: color, name, rarity, count, variants and sizes found, NEW badge; uncaught: silhouette with its rarity; open slots: Coming soon. Permanent: cards stay after selling. Opening it marks species seen. |
 | Controllers/ShopController | The Shop panel (button beside Mascots; one side panel at a time): Balls with each tier's rarity odds at your best distance (`Formulas.rarityOdds`, the numbers the server rolls with), and Bats. Park: the five upgrades with level, bonus and next cost, and the total park bonus. Shows the new-ball notice and makes the Shop button glow. |
 | Controllers/WelcomeBackController | Shows the offline payout for 4s; never covers SWING and ignores taps. |
-| Controllers/PromotionController *(stub)* | Promotion panel: requirement, what resets, what's kept, what the new tier gives. |
+| Controllers/PromotionController | The Stadium button under the HUD stats (glows when you can promote) and the promotion panel: requirements with ticks, what the next tier gives, what's kept and what resets, and a Promote button pinned at the bottom (second tap confirms). |
 | PitcherVisuals/PitchingMachine | Machine model and throw animation. |
 
 **Shared: `src/shared/`**
@@ -223,7 +223,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Config/Biomes | Biome visuals, keyed by world (`Biomes[1]` = World 1). |
 | Config/Mascots | Rarities, and species keyed by world then biome id: 6 per biome at launch (one per rarity), 8 Index slots. |
 | Config/Balls | 6 ball tiers in unlock order: price and base rarity weights. |
-| Config/Stadium | The 4 stadium tiers with their Power and Cash multipliers (tiers 2–4 tuned in the promotion step). |
+| Config/Stadium | The 4 stadium tiers: Power and Cash multipliers (×1, ×2, ×4, ×8) and what promoting into each needs (Cash on hand and a biome reached this run). |
 | Config/Park | Ballpark layout (seats, sign, upgrade spots), drawing distances, and the five upgrades (base cost, cost growth, bonus per level; max level 10). |
 | Config/Bats | 6 bats in order: price and Power-per-hit multiplier (`List`, `ById`). |
 
@@ -329,7 +329,7 @@ rows don't exist yet.
 | C → S | `MoveMascot` | Function | `uid, place, slot` (`"seats"`, `"hotbar"` or `"onDeck"`; swaps if taken, which is also the On Deck swap) → `{ ok, err? }` |
 | C → S | `EquipBest` / `SetAutoSell` | Function | (`on`) → `{ ok, err? }` |
 | C → S | `MarkIndexSeen` | Function | () → `{ ok }`: every caught species counts as seen (server copies its own Index) |
-| C → S | `Promote` *(planned)* | Function | → `{ ok, err? }` |
+| C → S | `Promote` | Function | → `{ ok, err? }`: stadium promotion if the next tier's requirements are met |
 | S → C | `Pitch` | Event | `Pitch` (see HookTypes) |
 | S → C | `HitResult` | Event | `{ hitId, powerGained, pitcherBonus, segments, distance, biomeIndex, catch? }`. `catch` = `HookTypes.Catch`: `{ uid, species, rarity, variant, size, cashPerSec, placedIn, slot?, isNewSpecies, sold? }` |
 | S → C | `Highlight` | Event | `Highlight` minus `player` |

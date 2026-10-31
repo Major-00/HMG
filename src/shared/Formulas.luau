@@ -19,6 +19,26 @@ function Formulas.stadiumTier(data: any): Stadium.StadiumTier
 	return Stadium[data.stadiumTier] or Stadium[1]
 end
 
+export type PromotionStatus = {
+	next: Stadium.StadiumTier?, -- nil at the top tier
+	cashOk: boolean,
+	biomeOk: boolean,
+	ready: boolean,
+}
+
+-- Whether the player can promote to the next stadium tier, and which requirement is missing.
+-- The server enforces this; the promotion panel shows the same thing.
+function Formulas.promotionStatus(data: any): PromotionStatus
+	local nextTier = Stadium[(data.stadiumTier or 1) + 1]
+	local requires = nextTier and nextTier.requires
+	if nextTier == nil or requires == nil then
+		return { next = nil, cashOk = false, biomeOk = false, ready = false }
+	end
+	local cashOk = data.cash >= requires.cash
+	local biomeOk = data.highestBiome >= requires.biome
+	return { next = nextTier, cashOk = cashOk, biomeOk = biomeOk, ready = cashOk and biomeOk }
+end
+
 -- A player's total Power multiplier from their save: bat x stadium tier x pitcher bonus.
 -- Shared so the client can predict a hit exactly (boosts join the product when they exist).
 function Formulas.multiplier(data: any, pitcherBonus: number): number

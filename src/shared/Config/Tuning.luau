@@ -147,6 +147,23 @@ local Tuning = {
 		-- The server never throws it earlier than this long after the ball lands (plus the
 		-- camera's return), so skipping can't make the game faster than this.
 		MIN_SHOWN = 0.3,
+
+		-- What the reveal shows (CatchRevealController): the Mascot runs in, hops to catch the
+		-- ball, turns to the camera, and its name types in. Times scale with the reveal length.
+		RUN_FROM_FULL = 16, -- studs the Mascot runs in a full reveal ...
+		RUN_FROM_SHORT = 5, -- ... and in a short one
+		RUN_PORTION = 0.45, -- share of the reveal spent running to the ball
+		HOP_TIME = 0.25, -- seconds of the catching hop
+		HOP_HEIGHT = 2.5, -- studs (times the Mascot's size)
+		TURN_TIME = 0.2, -- seconds to turn and face the camera after the catching hop
+		TYPE_FULL = 0.9, -- seconds for the name to type in, full reveal ...
+		TYPE_SHORT = 0.35, -- ... short reveal
+		CAM_BACK = 8, -- studs behind the running Mascot (times its size)
+		CAM_FRONT = 9, -- studs in front of it for the name shot (times its size)
+		CAM_UP = 4.5, -- studs above (times its size)
+		CAM_SIDE = 4, -- studs to the side while it runs, so it doesn't block the ball (times its size)
+		SIZE_SCALE = { normal = 1, big = 1.35, giant = 1.8 }, -- how big each size looks
+		LINGER_AFTER = 0.4, -- seconds the Mascot stays after the reveal, while the camera swoops back
 	},
 
 	-- Seated Mascots earn Cash every second (Formulas.cashRate), online and offline.

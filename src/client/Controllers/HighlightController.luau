@@ -6,9 +6,9 @@
 --   * Highlight "record" (the best distance passed a milestone): "PERFECT!" as the ball passes it.
 --     Celebrations are given on milestones, never for tap skill (CLAUDE.md guardrail 5).
 --   * Every landing: the distance pops up at the landing spot, then `Landed` fires.
---   * The Mascot caught (HitResult.catch): a toast when the ball lands, or as soon as the result
---     arrives if the ball landed first. Shows anything sold to make room ("Sold Frog +$120").
---     The catch reveal replaces this in a later step.
+--   * The Mascot caught (HitResult.catch): a toast with where it went and anything sold to make
+--     room ("Sold Frog +$120"). Shown when the catch reveal ends (CatchRevealController shows the
+--     Mascot itself), or at the landing / when the result arrives if there was no reveal.
 --   HighlightController.Landed -> Signal ({ hitId, segmentIndex, position, distance, biomeName, isFinal })
 --     The client side of the on-land hook, at the moment the ball visibly lands. The server's
 --     on-land hook (LandingService) already ran at hit time, because the catch depends on it.
@@ -28,6 +28,7 @@ local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Config:WaitForChild("Tuning"))
 
 local BallController = require(script.Parent.BallController)
+local CameraController = require(script.Parent.CameraController)
 local HudController = require(script.Parent.HudController)
 
 local LAUNCH_WAIT = 1 -- seconds to wait for a highlight's flight before showing the banner anyway
@@ -64,6 +65,7 @@ local toastFades: { Tween } = {} -- the fade-out playing, cancelled when a new t
 local catchesWaiting: { [number]: { catch: any, at: number } } = {} -- hitId -> catch not landed yet
 local landedHits: { [number]: number } = {} -- hitId -> when its final landing showed
 local catchShown: { [number]: boolean } = {}
+local revealing: { [number]: boolean } = {} -- hitId -> its catch reveal is playing
 
 local function text(props: { [string]: any }): TextLabel
 	local l = Instance.new("TextLabel")
@@ -410,6 +412,20 @@ local function onHitResult(result: any)
 	end
 end
 
+local function onRevealStarted(hitId: number)
+	revealing[hitId] = true
+end
+
+-- The reveal is over (played out or skipped): now show the catch toast with its details.
+local function onRevealEnded(hitId: number)
+	revealing[hitId] = nil
+	local waitingCatch = catchesWaiting[hitId]
+	if waitingCatch then
+		catchesWaiting[hitId] = nil
+		showCatch(hitId, waitingCatch.catch)
+	end
+end
+
 local function onTouchdown(
 	hitId: number,
 	segmentIndex: number,
@@ -421,10 +437,16 @@ local function onTouchdown(
 	if isFinal then
 		forgetOld()
 		landedHits[hitId] = landedHits[hitId] or os.clock()
-		local waitingCatch = catchesWaiting[hitId]
-		if waitingCatch then
-			catchesWaiting[hitId] = nil
-			showCatch(hitId, waitingCatch.catch)
+		if catchesWaiting[hitId] then
+			-- Let the camera react to this landing first: if it starts the catch reveal, the toast
+			-- waits for the reveal to end (so the Mascot's name isn't shown twice).
+			task.defer(function()
+				local waitingCatch = catchesWaiting[hitId]
+				if waitingCatch and not revealing[hitId] then
+					catchesWaiting[hitId] = nil
+					showCatch(hitId, waitingCatch.catch)
+				end
+			end)
 		end
 	end
 	HighlightController.Landed:Fire({
@@ -513,6 +535,8 @@ function HighlightController.Start()
 	Remotes.Event("HitResult").OnClientEvent:Connect(onHitResult)
 	BallController.Launched:Connect(onLaunched)
 	BallController.Touchdown:Connect(onTouchdown)
+	CameraController.RevealStarted:Connect(onRevealStarted)
+	CameraController.RevealEnded:Connect(onRevealEnded)
 end
 
 return HighlightController

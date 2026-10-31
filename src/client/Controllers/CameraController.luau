@@ -9,6 +9,7 @@
 -- sends Ready, so the server can bring the next pitch forward; it never waits on the client.
 --   CameraController.IsActive()   -> true while the camera is away from the batter
 --   CameraController.SkipReveal() -> ends the reveal now if one is showing; true if it did
+--   CameraController.RevealStarted / RevealEnded, SetRevealCamera(fn) -> for CatchRevealController
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,6 +18,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Formulas = require(Shared:WaitForChild("Formulas"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 
 local BallController = require(script.Parent.BallController)
@@ -38,15 +40,24 @@ type Cam = {
 	returnFrom: CFrame?,
 	cutSwapped: boolean,
 	holdFor: number, -- seconds of catch reveal at the landing
+	cutIn: boolean, -- the reveal's first shot has been cut to
 }
 
 local CameraController = {}
 
+-- The catch reveal, for CatchRevealController (it draws the Mascot; this only times it):
+--   RevealStarted (hitId, landing: Vector3, seconds, catch) when the camera starts holding
+--   RevealEnded   (hitId, skipped: boolean) when it stops, however it stops
+CameraController.RevealStarted = Signal.new()
+CameraController.RevealEnded = Signal.new()
+
 local cam: Cam? = nil
 local fade: Frame
--- hitId -> reveal seconds, from the server's HitResult (it carries the catch). Kept briefly.
-local revealTimes: { [number]: { seconds: number, at: number } } = {}
+-- hitId -> reveal seconds and the catch, from the server's HitResult. Kept briefly.
+local revealTimes: { [number]: { seconds: number, catch: any, at: number } } = {}
 local REVEAL_MEMORY = 20
+-- Optional shot for the reveal: (hitId, seconds since it started) -> where the camera should be.
+local revealCamera: ((hitId: number, elapsed: number) -> CFrame?)? = nil
 
 local function camera(): Camera
 	return workspace.CurrentCamera
@@ -64,9 +75,20 @@ local function chaseCFrame(target: Vector3, extraUp: number): CFrame
 	return CFrame.lookAt(pos, target + FIELD_DIRECTION * c.LOOK_AHEAD * 0.5)
 end
 
+-- Call whenever a state leaves the reveal hold, however it leaves.
+local function endReveal(state: Cam, skipped: boolean)
+	if state.phase == "hold" then
+		state.phase = "return" -- the caller sets up the rest; this just marks the reveal over
+		CameraController.RevealEnded:Fire(state.hitId, skipped)
+	end
+end
+
 -- Hands the camera back to Roblox. `snapBack` puts it at the saved batter view first.
 local function restore(snapBack: boolean)
 	local state = cam
+	if state then
+		endReveal(state, true)
+	end
 	cam = nil
 	fade.BackgroundTransparency = 1
 	local current = camera()
@@ -81,7 +103,8 @@ local function restore(snapBack: boolean)
 	current.CameraType = Enum.CameraType.Custom
 end
 
-local function beginReturn(state: Cam)
+local function beginReturn(state: Cam, skipped: boolean?)
+	endReveal(state, skipped == true)
 	state.phase = "return"
 	state.phaseStart = os.clock()
 	state.returnFrom = camera().CFrame
@@ -92,6 +115,9 @@ end
 
 local function onLaunched(hitId: number, info: any)
 	local current = camera()
+	if cam then
+		endReveal(cam, true) -- a new hit (lag let a pitch through) ends the old reveal
+	end
 	local saved = if cam then cam.saved else current.CFrame
 	cam = {
 		hitId = hitId,
@@ -103,6 +129,7 @@ local function onLaunched(hitId: number, info: any)
 		returnFrom = nil,
 		cutSwapped = false,
 		holdFor = 0,
+		cutIn = false,
 	}
 	fade.BackgroundTransparency = 1
 	current.CameraType = Enum.CameraType.Scriptable
@@ -137,6 +164,7 @@ local function onTouchdown(
 	state.phase = "hold"
 	state.holdFor = reveal.seconds
 	state.phaseStart = os.clock()
+	CameraController.RevealStarted:Fire(hitId, position, reveal.seconds, reveal.catch)
 end
 
 local function onHitResult(result: any)
@@ -149,7 +177,8 @@ local function onHitResult(result: any)
 			revealTimes[hitId] = nil
 		end
 	end
-	revealTimes[result.hitId] = { seconds = Formulas.revealTime(result.catch), at = now }
+	revealTimes[result.hitId] =
+		{ seconds = Formulas.revealTime(result.catch), catch = result.catch, at = now }
 	-- Keep the server's final distance for this hit: it decides swoop or cut on the way back.
 	local state = cam
 	if state and state.hitId == result.hitId and type(result.distance) == "number" then
@@ -183,8 +212,15 @@ local function step(dt: number)
 		current.CFrame = CFrame.lookAt(pos, ball + FIELD_DIRECTION * Tuning.Camera.LOOK_AHEAD * 0.5)
 	elseif state.phase == "hold" then
 		local landing = state.landing :: Vector3
-		current.CFrame = current.CFrame:Lerp(chaseCFrame(landing, 3), smoothing(dt))
-		if now - state.phaseStart >= state.holdFor then
+		local elapsed = now - state.phaseStart
+		local shot = if revealCamera then revealCamera(state.hitId, elapsed) else nil
+		if shot and not state.cutIn then
+			state.cutIn = true
+			current.CFrame = shot -- cut straight to the Mascot's view
+		else
+			current.CFrame = current.CFrame:Lerp(shot or chaseCFrame(landing, 3), smoothing(dt))
+		end
+		if elapsed >= state.holdFor then
 			beginReturn(state)
 		end
 	else
@@ -226,9 +262,14 @@ function CameraController.SkipReveal(): boolean
 	if state == nil or state.phase ~= "hold" then
 		return false
 	end
-	beginReturn(state)
+	beginReturn(state, true)
 	Remotes.Event("Ready"):FireServer(state.hitId)
 	return true
+end
+
+-- Sets the reveal's camera shot (CatchRevealController). Returning nil keeps the default view.
+function CameraController.SetRevealCamera(fn: (hitId: number, elapsed: number) -> CFrame?)
+	revealCamera = fn
 end
 
 function CameraController.Init()

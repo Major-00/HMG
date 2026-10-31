@@ -12,6 +12,7 @@
 --   BallController.Touchdown     -> Signal (hitId, segmentIndex, position, distance, isFinal) at each landing
 --   BallController.GetBallPosition(hitId)    -> where that hit's ball is now, or nil once it's gone
 --   BallController.GetDistance(hitId)        -> that flight's current total distance, or nil
+--   BallController.HideBall(hitId)           -> hides a landed ball (the catch reveal holds a copy)
 --   BallController.WatchDistance(hitId, d, fn) -> calls fn once the ball passes `d` studs down the
 --                                   track; returns false if that hit has no flight (fn not called)
 -- Balls are pooled and capped (Tuning.Flight.MAX_BALLS) to stay cheap on low-end phones.
@@ -139,6 +140,7 @@ local function acquire(): Ball?
 	end
 	liveCount += 1
 	local ball = table.remove(pool) or newBall()
+	ball.part.Transparency = 0 -- a pooled ball may have been hidden by a catch
 	ball.part.Parent = folder
 	return ball
 end
@@ -255,6 +257,14 @@ end
 function BallController.GetBallPosition(hitId: number): Vector3?
 	local flight = findFlight(hitId)
 	return if flight then flight.ball.part.Position else nil
+end
+
+-- Hides a landed hit's ball (the catch reveal's Mascot is holding its own copy). Visual only.
+function BallController.HideBall(hitId: number)
+	local flight = findFlight(hitId)
+	if flight then
+		flight.ball.part.Transparency = 1
+	end
 end
 
 function BallController.WatchDistance(hitId: number, distance: number, fn: () -> ()): boolean

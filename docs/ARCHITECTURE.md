@@ -189,9 +189,9 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/PitcherController | Shows the active pitcher and plays each `Pitch` using that pitcher's visual. |
 | Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
 | Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. |
-| Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hold on the landing for the catch reveal (time from the server's catch; a plain hold until the reveal visuals step), swoop (or fade-cut when far) back to the batter. `SkipReveal` on tap; sends `Ready`. |
-| Controllers/CatchRevealController *(planned)* | The Mascot's view as it chases and catches the ball; name types in letter by letter. Full for new Rare+ species, 1s otherwise, tap to skip (sends `Ready`). |
-| Controllers/HighlightController | Biome banner at the line crossing; distance popup; catch and sold toasts; client `Landed` signal. |
+| Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hold on the landing for the catch reveal (time from the server's catch), swoop (or fade-cut when far) back to the batter. Fires `RevealStarted` / `RevealEnded`; takes the reveal's shot from `SetRevealCamera`. `SkipReveal` on tap; sends `Ready`. |
+| Controllers/CatchRevealController | The catch reveal: a part-built placeholder Mascot (species color, rarity ring, variant mark, size scale) runs in, hops to catch the ball and turns to the camera while its name types in; the camera watches from its side. Full (3s, with NEW!, rarity, variant, size) for new Rare+ species, 1s otherwise. Visual only. Studio-only `RevealPreview` hook for screenshots. |
+| Controllers/HighlightController | Biome banner at the line crossing; distance popup; catch toast (after the reveal ends, or at once if there was none) and sold toasts; client `Landed` signal. |
 | Controllers/HudController | Power, Cash (and Cash/s), distance bar with biome markers, swing button. |
 | Controllers/ParkController *(planned)* | Draws seated Mascots and upgrade props on every plot; park upgrade buttons. |
 | Controllers/MascotController | Client side of the Mascot actions (Sell, Lock, Move, Equip Best, Auto-Sell): asks the server, shows "Sold X +$N". |

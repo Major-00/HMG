@@ -20,6 +20,7 @@
 
 local ContentProvider = game:GetService("ContentProvider")
 local KeyframeSequenceProvider = game:GetService("KeyframeSequenceProvider")
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -211,9 +212,39 @@ function SwingAnimator.CancelHold()
 	end
 end
 
+-- Studio only: an animation must be owned by whoever owns the experience (the user, or its
+-- group), or live servers can't play it. Warn about any set id that isn't.
+local function checkOwners()
+	local ids = Tuning.Fungo.ANIMATIONS
+	local list = { { "FungoStance", ids.stance }, { "FungoCarry", ids.carry } }
+	for i, tier in SwingData.TIERS do
+		table.insert(list, { tier.name, ids.swings[i] })
+	end
+	local owner = if game.CreatorType == Enum.CreatorType.Group then "Group" else "User"
+	for _, entry in list do
+		local name, id = entry[1], entry[2]
+		local number = id and tonumber(string.match(id, "%d+"))
+		if number then
+			local ok, info =
+				pcall(MarketplaceService.GetProductInfo, MarketplaceService, number, Enum.InfoType.Asset)
+			local creator = ok and info and info.Creator
+			if creator and (creator.CreatorType ~= owner or creator.CreatorTargetId ~= game.CreatorId) then
+				warn(
+					`[SwingAnimator] {name} ({id}) is owned by {creator.CreatorType} {creator.CreatorTargetId}, but this`
+						.. ` experience is owned by {owner} {game.CreatorId}: live servers can't play it. Publish it`
+						.. " again with Creator set to the experience's owner and paste the new id."
+				)
+			end
+		end
+	end
+end
+
 -- `away` says whether the ball-cam is away (CameraController.IsActive); held finishes wait for it.
 function SwingAnimator.Start(away: () -> boolean)
 	isCameraAway = away
+	if RunService:IsStudio() and game.CreatorId ~= 0 then
+		task.spawn(checkOwners)
+	end
 	player.CharacterAdded:Connect(function(character)
 		task.spawn(setup, character)
 	end)

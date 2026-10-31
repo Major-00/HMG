@@ -180,7 +180,9 @@ its group, or they won't play in live servers; until then they play only in Stud
    **Save to Roblox…** (in newer Studio: **Publish to Roblox**), choose **Creator** = the
    experience's owner (your account, or the group if the experience is in a group), give it the
    same name, and submit. Copy the id it shows (or find it in Creator Hub → Development Items →
-   Animations).
+   Animations). This experience is owned by a **group**, so the Creator must be that group, not
+   your personal account; animations owned by an account don't play in a group's experience
+   (a Studio play test warns about any id with the wrong owner).
 3. Paste each id into `src/shared/Config/Tuning.luau` → `Fungo.ANIMATIONS`, as
    `"rbxassetid://<id>"`: `stance`, `carry`, and `swings` in tier order (Pop, Solid, Crush,
    Blast, Launch).

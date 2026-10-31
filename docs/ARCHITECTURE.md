@@ -128,7 +128,7 @@ HMG/
    ├─ client/   → StarterPlayer.StarterPlayerScripts.Client (LocalScript)
    │  ├─ init.client.luau    loads Controllers: Init() all, then Start() all
    │  ├─ Controllers/
-   │  ├─ Modules/            client helpers that aren't controllers (MascotRig)
+   │  ├─ Modules/            client helpers that aren't controllers (MascotRig, MascotInfo, UILayout)
    │  └─ PitcherVisuals/     how each pitcher looks and throws (cosmetic)
    └─ shared/   → ReplicatedStorage.Shared               (Folder)
       ├─ Remotes, Types, HookTypes, Formulas, Format, Signal, BatPose
@@ -197,7 +197,10 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/ParkController | Draws the seated Mascots in every park, with Cash/s tags; culls far parks; idle bob for your own. (Planned: upgrade props and buttons.) |
 | Modules/MascotRig | The placeholder Mascot model (species color, rarity disc, variant mark, size scale), shared by the catch reveal and the parks. |
 | Controllers/MascotController | Client side of the Mascot actions (Sell, Lock, Move, Equip Best, Auto-Sell): asks the server, shows "Sold X +$N". |
-| Controllers/MascotPanelController *(planned)* | Hotbar and On Deck bar, plus the Mascots panel: Sell, Lock, Equip Best, Auto-Sell toggle (calls MascotController). |
+| Controllers/HotbarController | The 4 hotbar slots and On Deck, bottom-left (60pt touch targets). Tap a slot for Seat it / Swap in, Lock, Sell. Drawn above the panel and toasts so its menu is never covered. |
+| Controllers/MascotPanelController | The Mascots panel (button above the hotbar): Seated / Hotbar tabs with one fixed row per slot (rows never move under your finger), Equip Best, Auto-Sell, and per-Mascot Seat it / Swap in, Lock, Sell. Left side only, so SWING stays reachable; it takes taps on itself. |
+| Modules/MascotInfo | How a Mascot is described in the UI, which slot a move targets, and the Sell button (second tap for Rare+, ignores taps on a just-drawn button, resets if refused). |
+| Modules/UILayout | Shared screen layout (hotbar height, margins) so toasts, reveal text and the panel stay clear of the hotbar and SWING. |
 | Controllers/IndexController *(planned)* | The Index: world and biome tabs, 8 cards per biome. |
 | Controllers/ShopController *(planned, from BatShopController)* | Balls (with each tier's odds) and bats. |
 | Controllers/WelcomeBackController | Shows the offline payout for 4s; never covers SWING and ignores taps. |

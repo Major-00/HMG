@@ -28,6 +28,7 @@ local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Config:WaitForChild("Tuning"))
 
 local BallController = require(script.Parent.BallController)
+local UILayout = require(script.Parent.Parent:WaitForChild("Modules"):WaitForChild("UILayout"))
 local CameraController = require(script.Parent.CameraController)
 local HudController = require(script.Parent.HudController)
 
@@ -488,12 +489,19 @@ function HighlightController.Init()
 	toastFrame = Instance.new("Frame")
 	toastFrame.Name = "CatchToast"
 	toastFrame.AnchorPoint = Vector2.new(0.5, 1)
-	toastFrame.Position = UDim2.fromScale(0.5, 0.95)
+	toastFrame.Position = UDim2.new(0.5, 0, 1, -(UILayout.BOTTOM_BAR + 8)) -- just above the hotbar
 	toastFrame.Size = UDim2.fromScale(0.44, 0.17) -- narrow enough to clear SWING on small phones
 	toastFrame.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
 	toastFrame.BackgroundTransparency = 1
 	toastFrame.Visible = false
-	toastFrame.Parent = gui
+	-- Its own ScreenGui with the default insets, the same as the hotbar's, so "above the hotbar"
+	-- holds on notched phones too (the banner gui ignores the insets).
+	local toastGui = Instance.new("ScreenGui")
+	toastGui.Name = "CatchToast"
+	toastGui.ResetOnSpawn = false
+	toastGui.DisplayOrder = 20
+	toastGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	toastFrame.Parent = toastGui
 	local toastLimit = Instance.new("UISizeConstraint")
 	toastLimit.MaxSize = Vector2.new(520, 120)
 	toastLimit.Parent = toastFrame

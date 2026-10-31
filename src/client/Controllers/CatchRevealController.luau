@@ -250,7 +250,7 @@ function CatchRevealController.Init()
 	nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "MascotName"
 	nameLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-	nameLabel.Position = UDim2.fromScale(0.5, 0.74) -- below the Mascot; the catch toast comes after
+	nameLabel.Position = UDim2.fromScale(0.5, 0.6) -- below the Mascot, above the hotbar
 	nameLabel.Size = UDim2.fromScale(0.44, 0.11) -- as narrow as the catch toast: clear of SWING on small phones
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Font = Enum.Font.GothamBlack
@@ -261,7 +261,7 @@ function CatchRevealController.Init()
 	subLabel = Instance.new("TextLabel")
 	subLabel.Name = "Details"
 	subLabel.AnchorPoint = Vector2.new(0.5, 0)
-	subLabel.Position = UDim2.fromScale(0.5, 0.8)
+	subLabel.Position = UDim2.fromScale(0.5, 0.66)
 	subLabel.Size = UDim2.fromScale(0.44, 0.05)
 	subLabel.BackgroundTransparency = 1
 	subLabel.Font = Enum.Font.GothamBold

@@ -50,6 +50,7 @@ local active: AnimationTrack? = nil -- the swing playing or held
 local handlers: Handlers? = nil
 local held = false
 local cameraBackAt: number? = nil
+local warned = false -- the missing-animations warning, once per session
 local isCameraAway: () -> boolean = function()
 	return false
 end
@@ -151,6 +152,14 @@ local function setup(character: Model)
 			break
 		end
 		swings[i] = { a, b }
+	end
+	if #swings == 0 and not warned then
+		warned = true
+		warn(
+			"[SwingAnimator] The swing animations aren't published yet (Tuning.Fungo.ANIMATIONS is empty, and"
+				.. " only a Studio play test can preview them), so the simple swing plays. Publish them and paste"
+				.. " the ids: see docs/ARCHITECTURE.md, 'Publishing the animations'."
+		)
 	end
 	if stance then
 		stance.Looped = true

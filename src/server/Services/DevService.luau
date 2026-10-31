@@ -29,6 +29,7 @@ local DataService = require(script.Parent.DataService)
 local LandingService = require(script.Parent.LandingService)
 local IncomeService = require(script.Parent.IncomeService)
 local MascotService = require(script.Parent.MascotService)
+local PitchService = require(script.Parent.PitchService)
 
 local DevService = {}
 
@@ -149,6 +150,7 @@ local function report(player: Player): { [string]: number? }?
 		spawnToFirstHit = since(m.firstHitAt, m.spawnedAt),
 		spawnToBiome2 = since(m.biome2At, m.spawnedAt),
 		hits = m.hits,
+		rejected = PitchService.GetRejected(player), -- swings refused (a repeat tap in one cycle)
 	}
 end
 

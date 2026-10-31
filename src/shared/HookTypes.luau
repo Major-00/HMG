@@ -3,7 +3,8 @@
 -- Types only. New pitchers, the Mascot catch, rare-catch clips and biome challenges plug in here.
 -- Distances are in studs along the flight track, measured from home plate.
 
--- One pitch, decided by the server and sent to the client to draw.
+-- One pitch, decided by the server and sent to the client to draw (pitchers with mode "throw").
+-- A "toss" pitcher sends none: the player's tap starts each cycle.
 export type Pitch = {
 	pitchId: number, -- increases per player; the Swing remote echoes it back
 	pitcherId: string, -- which pitcher threw it ("pitching_machine" for now)
@@ -12,13 +13,18 @@ export type Pitch = {
 	expiresAt: number, -- last moment a tap still hits (arriveAt + Pitch.LATE_WINDOW)
 }
 
--- PITCHER SLOT. Each player has exactly one active pitcher.
--- The pitching machine is the first implementation; other pitchers come later.
+-- PITCHER SLOT. Each player has exactly one active pitcher. Two kinds:
+--   "toss"  (Fungo, the default): the player's tap tosses and swings in one motion; the server
+--           allows one hit per cycle and sends no Pitch.
+--   "throw" (the pitching machine; a pitcher pet may use it later): the server throws each
+--           Pitch, and a tap hits the one in play.
 export type Pitcher = {
 	id: string,
-	-- Seconds from the end of one hit to the next pitch's release. Faster pitchers = more taps per second.
+	mode: "toss" | "throw",
+	-- Extra seconds after the ball-cam is back before the next ball (0 for Fungo).
 	cooldown: (player: Player) -> number,
-	-- Seconds the ball takes from release to plate.
+	-- "throw": seconds the ball takes from release to plate.
+	-- "toss":  seconds from the tap to bat-on-ball (Tuning.Fungo.CONTACT_AT).
 	travelTime: (player: Player) -> number,
 	-- Optional: extra multiplier on Power gained from hitting this pitcher's pitch (default 1).
 	powerBonus: ((player: Player) -> number)?,

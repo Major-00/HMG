@@ -6,7 +6,7 @@
 
 local Migrations = {}
 
-Migrations.CURRENT_VERSION = 2
+Migrations.CURRENT_VERSION = 3
 
 -- Steps[n] upgrades a version-n save to version n + 1, editing it in place.
 local Steps: { [number]: (data: any) -> () } = {
@@ -17,6 +17,13 @@ local Steps: { [number]: (data: any) -> () } = {
 	[1] = function(data)
 		table.clear(data)
 		data.version = 1
+	end,
+	-- v2 -> v3: Fungo hitting replaces the pitching machine as everyone's pitcher. The machine
+	-- is still a pitcher, so saves that had it as the default move to Fungo.
+	[2] = function(data)
+		if data.pitcher == "pitching_machine" then
+			data.pitcher = "fungo"
+		end
 	end,
 }
 

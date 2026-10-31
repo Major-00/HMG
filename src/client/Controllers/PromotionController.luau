@@ -1,6 +1,6 @@
 --!strict
 -- PromotionController: stadium promotion. A "Stadium" button under the HUD stats (it glows when
--- you can promote) opens a panel on the left (one side panel at a time; SWING stays reachable):
+-- you can promote) opens a panel on the left (one side panel at a time; the game view stays tappable):
 --   what the next tier needs (Cash on hand, a biome reached this run) with ticks,
 --   what it gives (its Power and Cash multipliers), what you keep (every Mascot, locks, the
 --   Index) and what resets (Power, Cash, bats, balls, park upgrades, biome progress),

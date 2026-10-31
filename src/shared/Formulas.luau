@@ -100,6 +100,19 @@ function Formulas.biomeIndexAt(distance: number, world: number?): number
 	return index
 end
 
+-- The Fungo swing tier for a Power total (Tuning.Fungo.TIERS): the last tier whose minPower it
+-- reaches, and its number. Visual and audio only; it never changes a result or the cycle time.
+function Formulas.swingTier(power: number): (any, number)
+	local tiers = Tuning.Fungo.TIERS
+	local index = 1
+	for i, tier in tiers do
+		if power >= tier.minPower then
+			index = i
+		end
+	end
+	return tiers[index], index
+end
+
 -- Seconds the ball is in the air for a hit, before slow-motion.
 function Formulas.airTime(distance: number): number
 	local f = Tuning.Flight

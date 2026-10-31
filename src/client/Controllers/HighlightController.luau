@@ -529,13 +529,13 @@ function HighlightController.Init()
 		Size = UDim2.fromScale(1, 0.3),
 		Parent = bannerFrame,
 	})
-	-- Catch toast: bottom center, clear of the SWING button (bottom right).
+	-- Catch toast: bottom center, above the hotbar.
 	toastFrame = Instance.new("Frame")
 	toastFrame.Name = "CatchToast"
 	toastFrame.AnchorPoint = Vector2.new(0.5, 1)
 	-- Above the hotbar and the Mascots / Shop buttons, so it never hides them.
 	toastFrame.Position = UDim2.new(0.5, 0, 1, -(UILayout.BOTTOM_BAR + 8 + UILayout.PANEL_BUTTON.Y + 8))
-	toastFrame.Size = UDim2.fromScale(0.44, 0.17) -- narrow enough to clear SWING on small phones
+	toastFrame.Size = UDim2.fromScale(0.44, 0.17) -- narrow, so most of the game view stays tappable
 	toastFrame.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
 	toastFrame.BackgroundTransparency = 1
 	toastFrame.Visible = false

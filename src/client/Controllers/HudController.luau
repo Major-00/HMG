@@ -2,9 +2,9 @@
 -- HudController: placeholder HUD (the UI pass comes later).
 --   Top-left: Power, Cash (counting up smoothly between the server's payouts) and Cash/s.
 --   Top-center: distance bar with one equal-width section per biome,
---   filled to the last hit. Bottom-right: the big SWING button. A short "+Power" popup per hit.
+--   filled to the last hit. A short "+Power" popup per hit (bottom-right). There is no SWING
+--   button: a tap anywhere on the game view swings (InputController).
 -- Display only: every value comes from the server (StateController and HitResult).
---   HudController.SwingPressed -> Signal fired when the SWING button is pressed
 --   HudController.Celebrate(hitId) -> "PERFECT!" (once per hit). Given on milestones, never for skill.
 
 local Players = game:GetService("Players")
@@ -17,14 +17,13 @@ local Config = Shared:WaitForChild("Config")
 local Format = require(Shared:WaitForChild("Format"))
 local Formulas = require(Shared:WaitForChild("Formulas"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
-local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Config:WaitForChild("Tuning"))
 
+local BallController = require(script.Parent.BallController)
 local StateController = require(script.Parent.StateController)
+local UILayout = require(script.Parent.Parent:WaitForChild("Modules"):WaitForChild("UILayout"))
 
 local HudController = {}
-
-HudController.SwingPressed = Signal.new()
 
 local powerLabel: TextLabel
 local cashLabel: TextLabel
@@ -40,7 +39,6 @@ local bestMarker: Frame
 local hitLabel: TextLabel
 local popup: TextLabel
 local judgement: TextLabel
-local swingButton: TextButton
 
 local function label(props: { [string]: any }): TextLabel
 	local l = Instance.new("TextLabel")
@@ -170,35 +168,11 @@ local function build(): ScreenGui
 		Parent = gui,
 	})
 
-	-- Swing button: big touch target, bottom-right (thumb reach on phones).
-	swingButton = Instance.new("TextButton")
-	swingButton.Name = "SwingButton"
-	swingButton.AnchorPoint = Vector2.new(1, 1)
-	swingButton.Position = UDim2.new(1, -24, 1, -24)
-	swingButton.Size = UDim2.fromOffset(140, 140)
-	swingButton.BackgroundColor3 = Color3.fromRGB(230, 70, 60)
-	swingButton.Font = Enum.Font.GothamBlack
-	swingButton.Text = "SWING"
-	swingButton.TextScaled = true
-	swingButton.TextColor3 = Color3.new(1, 1, 1)
-	swingButton.AutoButtonColor = true
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.5, 0)
-	corner.Parent = swingButton
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0.18, 0)
-	padding.PaddingRight = UDim.new(0.18, 0)
-	padding.Parent = swingButton
-	swingButton.Parent = gui
-	swingButton.Activated:Connect(function()
-		HudController.SwingPressed:Fire()
-	end)
-
 	popup = label({
 		Name = "Popup",
 		Text = "",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -24, 1, -176),
+		Position = UDim2.new(1, -24, 1, -24 - UILayout.BOTTOM_BAR),
 		Size = UDim2.fromOffset(200, 28),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextTransparency = 1,
@@ -290,7 +264,7 @@ function HudController.Celebrate(hitId: number)
 	(judgementTween :: Tween):Play()
 end
 
-local function onHit(result: any)
+local function showHit(result: any)
 	barFill.Size = UDim2.fromScale(barPosition(result.distance), 1)
 	hitLabel.Text = `Last hit: {Format.number(result.distance)} studs - {Formulas.biomeNameAt(
 		result.distance,
@@ -347,7 +321,44 @@ function HudController.Start()
 	end)
 	refreshAll()
 	RunService.RenderStepped:Connect(tickCash)
-	Remotes.Event("HitResult").OnClientEvent:Connect(onHit)
+	-- Show each hit's numbers at bat-on-ball, not when the server's result arrives (with Fungo
+	-- that's usually during the toss, before the ball leaves the bat).
+	local waiting: { [number]: { result: any, at: number } } = {} -- results whose ball hasn't launched yet
+	local launched: { [number]: number } = {} -- launched balls whose result hasn't come yet
+	local function prune(now: number)
+		for id, at in launched do
+			if now - at > 15 then
+				launched[id] = nil
+			end
+		end
+		for id, entry in waiting do
+			if now - entry.at > 15 then
+				waiting[id] = nil
+			end
+		end
+	end
+	Remotes.Event("HitResult").OnClientEvent:Connect(function(result: any)
+		if type(result) ~= "table" or type(result.hitId) ~= "number" then
+			return
+		end
+		if launched[result.hitId] then
+			launched[result.hitId] = nil
+			showHit(result)
+		else
+			waiting[result.hitId] = { result = result, at = os.clock() }
+		end
+	end)
+	BallController.Launched:Connect(function(hitId: number)
+		local now = os.clock()
+		prune(now)
+		local entry = waiting[hitId]
+		if entry then
+			waiting[hitId] = nil
+			showHit(entry.result)
+		else
+			launched[hitId] = now
+		end
+	end)
 end
 
 return HudController

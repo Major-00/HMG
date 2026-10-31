@@ -1,6 +1,6 @@
 --!strict
 -- ShopController: the Cash shop, opened with the "Shop" button next to "Mascots" (one side
--- panel at a time, never over the SWING button; swinging keeps working while it's open).
+-- panel at a time, never over the whole game view; swinging keeps working while it's open).
 --   Balls: each tier in order with its price and its rarity odds at your best distance (from
 --     Formulas.rarityOdds, the same numbers the server rolls with). Buy the next one; the best
 --     ball you own is used on every hit. Cash only.

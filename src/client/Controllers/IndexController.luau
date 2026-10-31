@@ -1,6 +1,6 @@
 --!strict
 -- IndexController: the Mascot Index, opened with the "Index" button (third beside Mascots and
--- Shop; one side panel at a time, never over the SWING button).
+-- Shop; one side panel at a time, the game view stays tappable).
 --   World tabs (every world reached so far; it opens on the current one, and earlier worlds
 --   stay viewable), a ◀ biome ▶ switcher, and that biome's 8 cards in a grid:
 --     caught:      species color, name, rarity, how many caught, and the variants and sizes seen

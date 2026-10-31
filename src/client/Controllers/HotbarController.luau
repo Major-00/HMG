@@ -1,6 +1,6 @@
 --!strict
--- HotbarController: the 4 hotbar slots and the On Deck slot, bottom-left, clear of the SWING
--- button. Hotbar and On Deck Mascots don't earn; seat them to earn.
+-- HotbarController: the 4 hotbar slots and the On Deck slot, bottom-left. Taps on
+-- slots never swing. Hotbar and On Deck Mascots don't earn; seat them to earn.
 -- Tap a slot for its actions (a small menu above it):
 --   hotbar:  Seat it (into an empty seat, else swaps with your weakest seated Mascot), Lock, Sell
 --   On Deck: Swap in (into an empty hotbar slot, else swaps with the weakest unlocked one), Lock, Sell

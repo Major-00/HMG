@@ -12,6 +12,19 @@ local Tuning = {
 	},
 
 	Pitch = {
+		-- The pitcher every player starts with (a module of this id in server/Pitchers). Fungo is
+		-- a one-tap self-toss; the pitching machine is kept as a second slot implementation.
+		DEFAULT_PITCHER = "fungo",
+		-- Fungo: a toss may reach the server this much before its cycle is over (the client times
+		-- the cycle from its own tap, so network jitter can make it a little early). Spam
+		-- protection still allows one hit per cycle.
+		TOSS_GRACE = 0.3,
+		-- A valid toss that still comes too early (a slow swing before it, then a fast one) is
+		-- held on the server until its cycle opens, if that's at most this many seconds away,
+		-- rather than refused. One held toss at a time, so it's still one hit per cycle.
+		TOSS_MAX_HOLD = 1.5,
+
+		-- Pitching machine (not used by default)
 		MACHINE_TRAVEL_TIME = 0.7, -- seconds from release to the plate
 		MACHINE_COOLDOWN = 0.5, -- seconds after a hit (or a miss) before the next release
 		FIRST_PITCH_DELAY = 0.5, -- seconds after the character spawns before the first pitch
@@ -38,8 +51,9 @@ local Tuning = {
 	World = {
 		LANE_COUNT = 8, -- batting lanes per server (one per player; set the place's max players to match)
 		LANE_SPACING = 30, -- studs between lanes, side to side
-		PITCH_DISTANCE = 20, -- studs from the plate to the pitching machine
-		STRIKE_HEIGHT = 3, -- studs above the plate where the ball is hit
+		PITCH_DISTANCE = 20, -- studs from the plate to the pitching machine (when it's used)
+		STRIKE_HEIGHT = 3, -- studs above the ground where the ball is hit
+		HIT_CIRCLE_RADIUS = 7, -- the hitting circle around each plate: hit from anywhere in it
 
 		-- Biome ground, built on the client and streamed around the camera
 		TILE_LENGTH = 100, -- longest ground tile; each biome is cut into tiles from its own start
@@ -83,7 +97,7 @@ local Tuning = {
 		RETURN_TIME = 0.35, -- seconds to swoop back to the batter
 		CUT_BEYOND = 250, -- landings farther than this cut back (fade) instead of swooping
 		CUT_TIME = 0.3, -- seconds for the fade-out + fade-in of a cut
-		PITCH_ARRIVE_AFTER_RETURN = 0.15, -- next ball reaches the plate this long after the camera is back
+		PITCH_ARRIVE_AFTER_RETURN = 0.15, -- machine: next ball reaches the plate this long after the camera is back
 	},
 
 	Highlight = {
@@ -98,6 +112,95 @@ local Tuning = {
 		TO_CONTACT = 0.07, -- seconds from the ready pose to the strike point
 		FOLLOW_THROUGH = 0.09, -- seconds sweeping across after contact
 		RECOVER = 0.22, -- seconds back to the ready pose
+	},
+
+	-- Fungo hitting: one tap = toss and swing in one motion. Every tap hits; distance comes from
+	-- stats only. The server times the next toss from the same numbers (Formulas.ballCamTime).
+	Fungo = {
+		CONTACT_AT = 0.32, -- seconds from the tap to bat-on-ball (the ball launches then)
+		CYCLE = 0.5, -- seconds from the tap to the end of the swing; the same at every tier
+		TOSS_RISE = 0.55, -- share of the toss spent going up
+		STRIKE_FORWARD = 2.5, -- studs in front of the batter where the ball is hit
+		STRIKE_SIDE = 0.8, -- ... and this far to the batter's right
+
+		-- The swing grows with Power, visual and audio only (CLAUDE.md guardrail 4): it never
+		-- changes the result or the cycle time. A tier applies from its minPower up.
+		--   tossHeight  studs the ball goes above the strike point (a higher toss just moves
+		--               faster: the time is fixed)
+		--   hitStop     seconds the bat and ball freeze at contact (taken from the toss, so the
+		--               ball still launches at CONTACT_AT)
+		--   punch       degrees the camera's field of view kicks in at contact
+		--   crackVolume / crackPitch  the bat-crack sound
+		--   sparks      impact particles; dust: ground dust ("lift-off"); 0 = none
+		--   shockwave   ground ring { size = studs across at its widest, time = seconds }, or nil
+		--   trailWidth  how much wider the ball's trail is than the base
+		TIERS = {
+			{
+				minPower = 0,
+				name = "pop",
+				tossHeight = 2.5,
+				hitStop = 0,
+				punch = 0,
+				crackVolume = 0.35,
+				crackPitch = 1.25,
+				sparks = 0,
+				dust = 0,
+				shockwave = nil,
+				trailWidth = 1,
+			},
+			{
+				minPower = 25,
+				name = "solid",
+				tossHeight = 4,
+				hitStop = 0.03,
+				punch = 2,
+				crackVolume = 0.5,
+				crackPitch = 1.1,
+				sparks = 6,
+				dust = 0,
+				shockwave = nil,
+				trailWidth = 1.2,
+			},
+			{
+				minPower = 200,
+				name = "crush",
+				tossHeight = 6,
+				hitStop = 0.05,
+				punch = 4,
+				crackVolume = 0.7,
+				crackPitch = 1,
+				sparks = 12,
+				dust = 6,
+				shockwave = nil,
+				trailWidth = 1.5,
+			},
+			{
+				minPower = 2000,
+				name = "blast",
+				tossHeight = 8,
+				hitStop = 0.07,
+				punch = 6,
+				crackVolume = 0.85,
+				crackPitch = 0.9,
+				sparks = 18,
+				dust = 10,
+				shockwave = { size = 14, time = 0.35 },
+				trailWidth = 2,
+			},
+			{
+				minPower = 20000,
+				name = "launch",
+				tossHeight = 10,
+				hitStop = 0.09,
+				punch = 9,
+				crackVolume = 1,
+				crackPitch = 0.8,
+				sparks = 24,
+				dust = 16,
+				shockwave = { size = 24, time = 0.45 },
+				trailWidth = 2.6,
+			},
+		},
 	},
 
 	-- The Mascot caught on every landing. One shared function (Formulas.catchOdds) turns these

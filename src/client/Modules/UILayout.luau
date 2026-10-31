@@ -2,7 +2,7 @@
 -- UILayout: screen space shared by several controllers, so they never overlap on a phone.
 --   Bottom-left: the hotbar bar (HotbarController), BOTTOM_BAR points tall incl. its margin,
 --     with the "Mascots" and "Shop" buttons just above it.
---   Bottom-right: the SWING button (HudController), 140 points plus a 24-point margin.
+--   Bottom-right: kept clear (there's no SWING button: a tap anywhere on the game view swings).
 --   Left side: one panel at a time (Mascots or Shop), from the top margin down to the buttons.
 --   Toasts and reveal text sit centered, above BOTTOM_BAR.
 --   UILayout.PanelChanged -> Signal (name or nil): a side panel opened (others close) or closed

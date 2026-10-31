@@ -1,7 +1,7 @@
 --!strict
 -- WelcomeBackController: after time away, shows what seated Mascots earned offline.
 -- The server already paid it at load (IncomeService); this only shows the amount, once.
--- It never blocks play: a small card at the top, away from the SWING button, that closes by
+-- It never blocks play: a small card at the top, out of the way, that closes by
 -- itself. It ignores input, so a tap on it still swings (every tap succeeds).
 
 local Players = game:GetService("Players")

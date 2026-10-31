@@ -202,6 +202,8 @@ local function step(dt: number)
 		local ball = BallController.GetBallPosition(state.hitId)
 		if ball == nil then
 			beginReturn(state) -- the ball was dropped; come back
+			-- No reveal will play, so let the server shorten its gap too (it ignores repeats).
+			Remotes.Event("Ready"):FireServer(state.hitId)
 			return
 		end
 		-- Stay exactly BACK studs behind the ball along the track (smoothing there would lag
@@ -295,7 +297,13 @@ function CameraController.Start()
 	Remotes.Event("HitResult").OnClientEvent:Connect(onHitResult)
 	-- A respawn mid-flight goes straight back to the (new) batter.
 	player.CharacterAdded:Connect(function()
-		if cam then
+		local state = cam
+		if state then
+			if state.phase ~= "return" then
+				-- The reveal is cut short: tell the server, so its gap matches the client's and
+				-- the next tap after respawning still hits.
+				Remotes.Event("Ready"):FireServer(state.hitId)
+			end
 			restore(false) -- the old batter view belongs to the old character
 		end
 	end)

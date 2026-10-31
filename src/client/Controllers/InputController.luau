@@ -1,83 +1,48 @@
 --!strict
--- InputController: a tap anywhere in the world (not on a button or menu), a mouse click,
--- or the SWING button swings. Each swing plays the bat animation. Every tap on the pitch in play
--- is a hit (CLAUDE.md): the ball launches at once and Swing(pitchId) goes to the server, which
--- computes the numbers from stats only. One hit per pitch. Taps with no pitch in play only
--- swing the bat.
--- While the ball-cam is away, taps only count if a pitch is somehow already in play; a tap
--- during the catch reveal skips it.
+-- InputController: turns input into swings. There is no SWING button.
+--   Touch:   a tap anywhere on the game view (taps on buttons and menus don't count)
+--   PC:      left click on the game view, or Space (Space no longer jumps)
+--   Gamepad: R2
+-- With Fungo (the default pitcher) every tap tosses and swings in one motion
+-- (FungoController.Toss): no indicator, no second tap, no timing, and one toss per cycle.
+-- With the pitching machine (kept as a second pitcher), a tap hits the pitch in play.
+-- While the ball-cam is away, a tap skips the catch reveal instead.
 
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local BatPose = require(Shared:WaitForChild("BatPose"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 
 local Controllers = script.Parent
 local BallController = require(Controllers.BallController)
 local CameraController = require(Controllers.CameraController)
-local HudController = require(Controllers.HudController)
+local FungoController = require(Controllers.FungoController)
 local PitcherController = require(Controllers.PitcherController)
+local BatSwing = require(Controllers.Parent:WaitForChild("Modules"):WaitForChild("BatSwing"))
 
 local player = Players.LocalPlayer
 
 local InputController = {}
 
-local swinging = false
-
--- Local-only bat swing: ready pose -> level through the strike point -> follow-through -> back.
-local function playSwing()
-	if swinging then
-		return
-	end
-	local character = player.Character
-	local bat = character and character:FindFirstChild("Bat")
-	local grip = bat and bat:FindFirstChild("BatGrip")
-	if grip == nil or not grip:IsA("Weld") or grip.Part0 == nil then
-		return
-	end
-	swinging = true
-	local isR6 = (grip.Part0 :: BasePart).Name == "Right Arm"
-	local s = Tuning.Swing
-	local steps = {
-		{ time = s.TO_CONTACT, pose = BatPose.CONTACT, style = Enum.EasingStyle.Quad },
-		{ time = s.FOLLOW_THROUGH, pose = BatPose.FOLLOW, style = Enum.EasingStyle.Linear },
-		{ time = s.RECOVER, pose = BatPose.READY, style = Enum.EasingStyle.Sine },
-	}
-	local function play(i: number)
-		local step = steps[i]
-		if step == nil or grip.Parent == nil then
-			swinging = false
-			return
-		end
-		local tween = TweenService:Create(
-			grip,
-			TweenInfo.new(step.time, step.style),
-			{ C0 = BatPose.grip(step.pose, isR6) }
-		)
-		tween.Completed:Once(function()
-			play(i + 1)
-		end)
-		tween:Play()
-	end
-	play(1)
-end
-
-local function swing()
+-- Pitching machine: hit the pitch in play. If lag let one through while the camera is away,
+-- still hit it (the ball-cam switches to the new ball) so the pitch isn't lost.
+local function machineSwing()
 	local pitch = PitcherController.TakePending()
 	if CameraController.IsActive() then
-		-- The camera is away. Normally no pitch is in play then; if lag let one through,
-		-- still hit it (the ball-cam switches to the new ball) so the pitch isn't lost.
 		if pitch == nil then
-			CameraController.SkipReveal() -- a tap during the catch reveal skips it
+			CameraController.SkipReveal()
 			return
 		end
 	else
-		playSwing()
+		local s = Tuning.Swing
+		BatSwing.Play(
+			player.Character,
+			{ toContact = s.TO_CONTACT, follow = s.FOLLOW_THROUGH, recover = s.RECOVER }
+		)
 	end
 	if pitch == nil then
 		return
@@ -86,9 +51,19 @@ local function swing()
 	Remotes.Event("Swing"):FireServer(pitch.pitchId)
 end
 
-function InputController.Start()
-	HudController.SwingPressed:Connect(swing)
+local function swing()
+	if player:GetAttribute("PitcherMode") == "throw" then
+		machineSwing()
+		return
+	end
+	if CameraController.IsActive() then
+		CameraController.SkipReveal() -- a tap during the catch reveal skips it
+		return
+	end
+	FungoController.Toss()
+end
 
+function InputController.Start()
 	-- Touch: taps on the 3D world only (taps on buttons and menus are excluded).
 	UserInputService.TouchTapInWorld:Connect(function(_position, processedByUI)
 		if not processedByUI then
@@ -102,6 +77,15 @@ function InputController.Start()
 			swing()
 		end
 	end)
+
+	-- Space and gamepad R2. Bound above the default controls so Space swings instead of jumping;
+	-- typing in a text box never reaches here.
+	ContextActionService:BindActionAtPriority("Swing", function(_name, state)
+		if state == Enum.UserInputState.Begin then
+			swing()
+		end
+		return Enum.ContextActionResult.Sink
+	end, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.ButtonR2)
 end
 
 return InputController

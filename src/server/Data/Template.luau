@@ -7,7 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local Template: Types.PlayerData = {
-	version = 2,
+	version = 3,
 
 	-- Run progress: reset on stadium promotion
 	power = 0,
@@ -38,7 +38,7 @@ local Template: Types.PlayerData = {
 	autoSell = true,
 	index = {},
 	stadiumTier = 1,
-	pitcher = "pitching_machine",
+	pitcher = "fungo",
 
 	settings = {
 		music = true,

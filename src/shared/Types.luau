@@ -46,7 +46,7 @@ export type PlayerData = {
 	autoSell: boolean,
 	index: { [string]: IndexEntry }, -- key = species id
 	stadiumTier: number, -- 1 = Sandlot Field; tier N plays World N
-	pitcher: string, -- active Pitcher id ("pitching_machine")
+	pitcher: string, -- active Pitcher id ("fungo"; server/Pitchers)
 
 	-- Player preferences
 	settings: {

@@ -1,6 +1,6 @@
 --!strict
 -- MascotPanelController: the Mascots panel, opened with the "Mascots" button above the hotbar.
--- Down the left side, never over the SWING button, so you can keep swinging while it's open.
+-- Down the left side, leaving the game view tappable, so you can keep swinging while it's open.
 --   Tabs: Seated (earning) and Hotbar (+ On Deck).
 --   Equip Best (seats your 10 best earners) and the Auto-Sell toggle.
 --   One fixed row per slot (Seat 1-10, or Hotbar 1-4 and On Deck), so rows never move under
@@ -273,7 +273,7 @@ function MascotPanelController.Init()
 	local open = openButton
 
 	-- From the top margin down to just above the hotbar (it covers the Mascots button, which
-	-- hides while it's open), and never as far right as the SWING button.
+	-- hides while it's open), and never across the whole game view.
 	panel = Instance.new("Frame")
 	panel.Name = "Panel"
 	panel.Active = true -- taps on the panel never reach the world (no accidental swings)

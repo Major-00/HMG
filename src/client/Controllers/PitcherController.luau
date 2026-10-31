@@ -1,6 +1,7 @@
 --!strict
--- PitcherController: receives each Pitch, plays the active pitcher's throw, and keeps the
--- pitch in play so a tap can be sent for it. One swing per pitch: TakePending clears it.
+-- PitcherController: for "throw" pitchers (the pitching machine, not the default), receives each
+-- Pitch, plays the pitcher's throw, and keeps the pitch in play so a tap can be sent for it. One
+-- swing per pitch: TakePending clears it. Fungo (the default) sends no Pitch: FungoController.
 --   PitcherController.TakePending() -> the pitch in play (and clears it), or nil if there is none
 --   PitcherController.GetLane()     -> this player's lane model, or nil
 
@@ -13,7 +14,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local BallController = require(script.Parent.BallController)
 
-local DEFAULT_PITCHER = "pitching_machine"
+local MACHINE = "pitching_machine"
 
 local player = Players.LocalPlayer
 local visuals = script.Parent.Parent:WaitForChild("PitcherVisuals")
@@ -50,7 +51,7 @@ local function onPitch(pitch: HookTypes.Pitch)
 	-- Show the pitching machine only while it's the active pitcher.
 	local machine = lane:FindFirstChild("PitchingMachine")
 	if machine then
-		local hidden = pitch.pitcherId ~= DEFAULT_PITCHER
+		local hidden = pitch.pitcherId ~= MACHINE
 		for _, part in machine:GetDescendants() do
 			if part:IsA("BasePart") then
 				part.LocalTransparencyModifier = if hidden then 1 else 0

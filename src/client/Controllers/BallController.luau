@@ -1,7 +1,14 @@
 --!strict
 -- BallController: draws balls. Cosmetic only; the server decides every number.
---   ShowPitch(pitch, from, to) -> ball travels from the pitcher to the strike point (and past it if unswung)
---   Hit(pitchId)               -> on tap the ball launches at once (CLAUDE.md guardrail 3), flying to a
+--   BeginToss(hitId)           -> Fungo: a toss for this hit has started (its HitResult may come first)
+--   Launch(hitId, strike, laneStrike, style?)
+--                              -> Fungo: at bat-on-ball the ball launches from `strike` (where the
+--                                 batter stands in the hitting circle) and lands on the lane's centre
+--                                 line (`laneStrike` = the lane's StrikePoint), flying to the server's
+--                                 distance if it's here, else the predicted one. style.trailWidth
+--                                 widens the trail (visual only).
+--   ShowPitch(pitch, from, to) -> machine: ball travels from the pitcher to the strike point (and past it if unswung)
+--   Hit(pitchId)               -> machine: on tap the ball launches at once (CLAUDE.md guardrail 3), flying to a
 --                                 predicted distance from the same formulas the server uses
 --   HitResult (remote)         -> the server's real flight. If it differs from the prediction (a new
 --                                 multiplier, an on-land handler) the flight re-plans to it mid-air.
@@ -59,6 +66,7 @@ type Flight = {
 	hitId: number,
 	ball: Ball,
 	strike: Vector3, -- where the hit started
+	laneStrike: Vector3, -- the lane's strike point: the ball lands on its line down the field
 	distance: number, -- total distance of the current plan
 	startedAt: number,
 	airTime: number, -- flight time without slow motion
@@ -78,7 +86,10 @@ local pool: { Ball } = {}
 local pitches: { [number]: PitchBall } = {}
 local flights: { Flight } = {}
 local liveCount = 0
-local lastStrike: Vector3? = nil -- strike point of the latest pitch, for hits whose ball was dropped
+local lastStrike: Vector3? = nil -- strike point of the latest hit, for hits whose ball was dropped
+local lastLaneStrike: Vector3? = nil -- ... and its lane's strike point
+-- Fungo tosses started but not launched yet: the server's result for one may arrive first.
+local tossing: { [number]: { at: number, result: any? } } = {}
 local pitcherBonus = 1 -- the active pitcher's Power bonus, from the last HitResult
 local localHits: { [number]: number } = {} -- hitId -> os.clock() of hits launched on tap
 
@@ -141,6 +152,7 @@ local function acquire(): Ball?
 	liveCount += 1
 	local ball = table.remove(pool) or newBall()
 	ball.part.Transparency = 0 -- a pooled ball may have been hidden by a catch
+	ball.trail.WidthScale = NumberSequence.new(1) -- and its trail widened by a big hit
 	ball.part.Parent = folder
 	return ball
 end
@@ -164,6 +176,7 @@ function BallController.ShowPitch(pitch: HookTypes.Pitch, from: Vector3, to: Vec
 	end
 	ball.part.Position = from
 	lastStrike = to
+	lastLaneStrike = to
 	pitches[pitch.pitchId] = { ball = ball, pitch = pitch, from = from, to = to }
 end
 
@@ -185,9 +198,15 @@ local function findFlight(hitId: number): Flight?
 	return nil
 end
 
--- Legs for a set of flight segments starting at `strike`.
-local function planLegs(strike: Vector3, segments: { any }, total: number): ({ Leg }, number)
-	local ground = strike - Vector3.new(0, Tuning.World.STRIKE_HEIGHT - GROUND_OFFSET, 0)
+-- Legs for a set of flight segments starting at `strike` and landing on the line down the field
+-- from `laneStrike` (the same spot for the pitching machine; anywhere in the circle for Fungo).
+local function planLegs(
+	strike: Vector3,
+	laneStrike: Vector3,
+	segments: { any },
+	total: number
+): ({ Leg }, number)
+	local ground = laneStrike - Vector3.new(0, Tuning.World.STRIKE_HEIGHT - GROUND_OFFSET, 0)
 	local f = Tuning.Flight
 	local airTime = Formulas.airTime(total)
 	local legs: { Leg } = {}
@@ -209,13 +228,23 @@ local function planLegs(strike: Vector3, segments: { any }, total: number): ({ L
 	return legs, airTime
 end
 
-local function launch(hitId: number, ball: Ball, strike: Vector3, segments: { any }, total: number)
-	local legs, airTime = planLegs(strike, segments, total)
+local function launch(
+	hitId: number,
+	ball: Ball,
+	strike: Vector3,
+	laneStrike: Vector3,
+	segments: { any },
+	total: number
+)
+	local legs, airTime = planLegs(strike, laneStrike, segments, total)
 	local now = os.clock()
+	lastStrike = strike
+	lastLaneStrike = laneStrike
 	local flight: Flight = {
 		hitId = hitId,
 		ball = ball,
 		strike = strike,
+		laneStrike = laneStrike,
 		distance = total,
 		startedAt = now,
 		airTime = airTime,
@@ -234,7 +263,15 @@ local function launch(hitId: number, ball: Ball, strike: Vector3, segments: { an
 	})
 end
 
--- The tap: launch now, to the predicted distance. Every tap on a pitch is a hit.
+-- The distance this tap's hit will fly: the same formulas the server uses.
+function BallController.PredictDistance(): number
+	local data = StateController.Get()
+	return if data
+		then Formulas.distance(data.power + Formulas.powerGain(Formulas.multiplier(data, pitcherBonus)))
+		else Formulas.distance(Tuning.Power.PER_HIT)
+end
+
+-- Machine: the tap launches the pitch in play now, to the predicted distance.
 function BallController.Hit(pitchId: number)
 	local entry = pitches[pitchId]
 	if entry == nil then
@@ -242,11 +279,59 @@ function BallController.Hit(pitchId: number)
 	end
 	pitches[pitchId] = nil
 	localHits[pitchId] = os.clock()
-	local data = StateController.Get()
-	local predicted = if data
-		then Formulas.distance(data.power + Formulas.powerGain(Formulas.multiplier(data, pitcherBonus)))
-		else Formulas.distance(Tuning.Power.PER_HIT)
-	launch(pitchId, entry.ball, entry.to, { { from = 0, to = predicted, source = "hit" } }, predicted)
+	local predicted = BallController.PredictDistance()
+	launch(
+		pitchId,
+		entry.ball,
+		entry.to,
+		entry.to,
+		{ { from = 0, to = predicted, source = "hit" } },
+		predicted
+	)
+end
+
+-- Fungo: a toss for `hitId` started; its result is kept until Launch if it arrives first.
+function BallController.BeginToss(hitId: number)
+	local now = os.clock()
+	for id, entry in tossing do
+		if now - entry.at > 15 then
+			tossing[id] = nil -- never launched (the character went away mid-toss)
+		end
+	end
+	for id, at in localHits do
+		if now - at > 15 then
+			localHits[id] = nil -- forget hits launched long ago
+		end
+	end
+	tossing[hitId] = { at = now, result = nil }
+end
+
+-- Fungo: bat-on-ball. Flies to the server's distance when its result is already here (it usually
+-- is: it was sent at the tap), else to the predicted one, re-planned when the result comes.
+function BallController.Launch(
+	hitId: number,
+	strike: Vector3,
+	laneStrike: Vector3,
+	style: { trailWidth: number? }?
+)
+	local entry = tossing[hitId]
+	tossing[hitId] = nil
+	localHits[hitId] = os.clock()
+	local ball = acquire()
+	if ball == nil then
+		return
+	end
+	local width = style and style.trailWidth
+	if width then
+		ball.trail.WidthScale = NumberSequence.new(width)
+	end
+	local result = entry and entry.result
+	if result then
+		launch(hitId, ball, strike, laneStrike, result.segments, result.distance)
+	else
+		local predicted = BallController.PredictDistance()
+		launch(hitId, ball, strike, laneStrike, { { from = 0, to = predicted, source = "hit" } }, predicted)
+	end
 end
 
 function BallController.GetDistance(hitId: number): number?
@@ -327,7 +412,7 @@ local function onHitResult(result: any)
 	local flight = findFlight(result.hitId)
 	if flight then
 		if flight.distance ~= result.distance then
-			local legs, airTime = planLegs(flight.strike, result.segments, result.distance)
+			local legs, airTime = planLegs(flight.strike, flight.laneStrike, result.segments, result.distance)
 			flight.distance = result.distance
 			if flight.touched < #flight.legs then
 				-- Still in the air: re-plan to the server's flight.
@@ -344,6 +429,11 @@ local function onHitResult(result: any)
 		end
 		return
 	end
+	local toss = tossing[result.hitId]
+	if toss then
+		toss.result = result -- the bat hasn't met the ball yet; Launch uses this
+		return
+	end
 	if localHits[result.hitId] then
 		return -- this hit was already shown on tap and has finished; don't fly it twice
 	end
@@ -351,9 +441,10 @@ local function onHitResult(result: any)
 	local entry = pitches[result.hitId]
 	pitches[result.hitId] = nil
 	local strike = if entry then entry.to else lastStrike
+	local laneStrike = if entry then entry.to else lastLaneStrike
 	local ball = if entry then entry.ball else acquire()
-	if strike and ball then
-		launch(result.hitId, ball, strike, result.segments, result.distance)
+	if strike and laneStrike and ball then
+		launch(result.hitId, ball, strike, laneStrike, result.segments, result.distance)
 	elseif ball then
 		release(ball)
 	end

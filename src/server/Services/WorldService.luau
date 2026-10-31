@@ -1,7 +1,10 @@
 --!strict
 -- WorldService: builds the batting lanes at startup and gives each player their own lane.
--- A lane is a dirt pad, a home plate, a batter spawn, a pitching machine, and the player's
--- ballpark plot behind the plate (Config/Park): 10 seat pads, an owner sign, upgrade spots.
+-- A lane is a dirt pad, a home plate inside a chalk hitting circle (the player hits from anywhere
+-- in it; Fungo needs no pitcher in the scene), a batter spawn, and the player's ballpark plot
+-- behind the plate (Config/Park): 10 seat pads, an owner sign, upgrade spots. The pitching
+-- machine is only built when it's the default pitcher (Tuning.Pitch.DEFAULT_PITCHER).
+-- The plate's StrikePoint marks the lane's centre line: every ball lands on it.
 -- The lane model carries the owner (attribute "Owner") and what's seated ("Seats").
 -- Lanes sit side by side along X; every ball flies along +Z from its lane's plate.
 -- Lane models are Persistent so streaming never hides a player's plate or machine.
@@ -139,23 +142,79 @@ local function buildPlot(lane: Model, origin: Vector3)
 	plot.Parent = lane
 end
 
+-- The pitching machine (a "throw" pitcher, not the default): the machine and its release point.
+local function buildPitchingMachine(model: Model, origin: Vector3)
+	local w = Tuning.World
+	local machine = Instance.new("Model")
+	machine.Name = "PitchingMachine"
+	local machineAt = origin + Vector3.new(0, 0, w.PITCH_DISTANCE)
+	part({
+		Name = "Base",
+		Size = Vector3.new(3, 2.5, 3),
+		Position = machineAt + Vector3.new(0, 1.25, 0),
+		Color = Color3.fromRGB(90, 96, 110),
+		Parent = machine,
+	})
+	local barrel = part({
+		Name = "Barrel",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(2.5, 1.2, 1.2),
+		-- Cylinders run along X; turn it to run along Z, pointing at the plate.
+		CFrame = CFrame.new(machineAt + Vector3.new(0, w.STRIKE_HEIGHT, -1))
+			* CFrame.Angles(0, math.rad(90), 0),
+		Color = Color3.fromRGB(240, 140, 40),
+		Parent = machine,
+	})
+	local release = Instance.new("Attachment")
+	release.Name = "ReleasePoint"
+	release.Parent = barrel
+	release.WorldPosition = machineAt + Vector3.new(0, w.STRIKE_HEIGHT, -2.4)
+	machine.Parent = model
+end
+
+-- The hitting circle: a flat chalk ring on the pad with a lighter disc inside. Doesn't collide.
+local function buildHitCircle(model: Model, origin: Vector3)
+	local r = Tuning.World.HIT_CIRCLE_RADIUS
+	local upright = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder's flat faces point along X
+	local function disc(name: string, radius: number, y: number, color: Color3)
+		part({
+			Name = name,
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.05, radius * 2, radius * 2),
+			CFrame = CFrame.new(origin + Vector3.new(0, y, 0)) * upright,
+			Color = color,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			Parent = model,
+		})
+	end
+	disc("HitCircle", r, 0.03, Color3.fromRGB(245, 240, 230))
+	disc("HitCircleInner", r - 0.35, 0.05, Color3.fromRGB(196, 152, 106))
+end
+
 local function buildLane(lane: number): Model
 	local w = Tuning.World
 	local origin = plateOrigin(lane)
 	local facing = CFrame.lookAt(origin, origin + Vector3.zAxis) -- looks down the field (+Z)
+	local useMachine = Tuning.Pitch.DEFAULT_PITCHER == "pitching_machine"
 
 	local model = Instance.new("Model")
 	model.Name = `Lane{lane}`
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	model:SetAttribute("Lane", lane)
 
+	-- Dirt around the hitting circle (and out to the machine when it's used).
+	local padFront = if useMachine then w.PITCH_DISTANCE + 7 else w.HIT_CIRCLE_RADIUS + 2
+	local padBack = w.HIT_CIRCLE_RADIUS + 2
 	part({
 		Name = "Pad",
-		Size = Vector3.new(16, 1, w.PITCH_DISTANCE + 14),
-		Position = origin + Vector3.new(0, -0.5, w.PITCH_DISTANCE / 2),
+		Size = Vector3.new(2 * (w.HIT_CIRCLE_RADIUS + 2), 1, padFront + padBack),
+		Position = origin + Vector3.new(0, -0.5, (padFront - padBack) / 2),
 		Color = Color3.fromRGB(176, 132, 88),
 		Parent = model,
 	})
+	buildHitCircle(model, origin)
 
 	local plate = part({
 		Name = "Plate",
@@ -182,32 +241,9 @@ local function buildLane(lane: number): Model
 	spawn.Neutral = true
 	spawn.Parent = model
 
-	-- Pitching machine: the default pitcher. Hidden by the client when another pitcher is active.
-	local machine = Instance.new("Model")
-	machine.Name = "PitchingMachine"
-	local machineAt = origin + Vector3.new(0, 0, w.PITCH_DISTANCE)
-	part({
-		Name = "Base",
-		Size = Vector3.new(3, 2.5, 3),
-		Position = machineAt + Vector3.new(0, 1.25, 0),
-		Color = Color3.fromRGB(90, 96, 110),
-		Parent = machine,
-	})
-	local barrel = part({
-		Name = "Barrel",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(2.5, 1.2, 1.2),
-		-- Cylinders run along X; turn it to run along Z, pointing at the plate.
-		CFrame = CFrame.new(machineAt + Vector3.new(0, w.STRIKE_HEIGHT, -1))
-			* CFrame.Angles(0, math.rad(90), 0),
-		Color = Color3.fromRGB(240, 140, 40),
-		Parent = machine,
-	})
-	local release = Instance.new("Attachment")
-	release.Name = "ReleasePoint"
-	release.Parent = barrel
-	release.WorldPosition = machineAt + Vector3.new(0, w.STRIKE_HEIGHT, -2.4)
-	machine.Parent = model
+	if useMachine then
+		buildPitchingMachine(model, origin)
+	end
 
 	buildPlot(model, origin)
 	return model

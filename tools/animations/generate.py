@@ -502,31 +502,58 @@ def stance(breath=0.0, sway=0.0):
 
 # The swing's core, shaped per tier:
 #   lift: front knee lift at the load (studs); coil: hips turned back at the load (degrees);
-#   fire: hips open at contact; finish: the follow-through pose for the tier.
+#   fire: hips open at contact; apex: the toss height the head follows (Tuning tossHeight);
+#   finish: the follow-through pose for the tier.
 TIERS = [
-    {"name": "Pop", "lift": 0.15, "coil": 14, "fire": 38},
-    {"name": "Solid", "lift": 0.28, "coil": 20, "fire": 45},
-    {"name": "Crush", "lift": 0.4, "coil": 26, "fire": 52},
-    {"name": "Blast", "lift": 0.55, "coil": 31, "fire": 58},
-    {"name": "Launch", "lift": 0.7, "coil": 36, "fire": 64},
+    {"name": "Pop", "lift": 0.15, "coil": 14, "fire": 38, "apex": 3},
+    {"name": "Solid", "lift": 0.28, "coil": 20, "fire": 45, "apex": 3.6},
+    {"name": "Crush", "lift": 0.4, "coil": 26, "fire": 52, "apex": 4.2},
+    {"name": "Blast", "lift": 0.55, "coil": 31, "fire": 58, "apex": 4.8},
+    {"name": "Launch", "lift": 0.7, "coil": 36, "fire": 64, "apex": 5.5},
 ]
 CONTACT_GRIP = (-0.25, -0.45, -1.2)
 CONTACT_BAT = (0.12, 0.06, -1)
 
 
+# Where the ball is hit, in B (from the contact pose), and above it, for the head to follow.
+BALL_B = (0.1, -0.35, -4.1)
+
+
+def above_ball(h):
+    return (BALL_B[0], BALL_B[1] + h, BALL_B[2])
+
+
 def toss_pose(tier):
+    """The toss: bat still on the shoulder in the top hand, the glove hand flips the ball up,
+    knees dip, eyes go up after it."""
     return {
         "root": (0.0, -0.45, 0),
         "hips": (-3, 6, 0),
-        "waist": (-10, 6, 0),
+        "waist": (-8, 2, 0),
         "front": {"at": FEET_FRONT, "yaw": -15},
         "back": {"at": FEET_BACK, "yaw": 5},
-        "grip": (0.6, 0.6, -0.65),
-        "bat": (0.3, 0.86, 0.42),
+        "grip": (0.5, 0.4, -0.9),
+        "bat": (0.45, 0.62, 0.64),
+        "batUp": (0.4, 0.5, -1),
+        "left": {"at": (-0.25, 1.0, -1.25), "rot": (0, 0, -30)},
+        "leftElbow": (-0.6, -1, 0.3),
+        "look": above_ball(2.0),
+    }
+
+
+def set_pose(tier):
+    """Into the hitting stance while the ball is in the air: both hands back on the bat, bat off
+    the shoulder and up, feet set, eyes on the ball near the top of the toss."""
+    return {
+        "root": (0.15, -0.4, 0),
+        "hips": (-8, 5, 0),
+        "waist": (-14, 8, 0),
+        "front": {"at": FEET_FRONT, "yaw": -10},
+        "back": {"at": FEET_BACK, "yaw": 5},
+        "grip": (0.7, 0.5, -0.6),
+        "bat": (0.3, 0.82, 0.48),
         "batUp": (0.4, 0.4, -1),
-        "left": {"at": (-0.35, 0.55, -1.25), "rot": (0, 0, -20)},
-        "leftElbow": (-0.6, -1, 0.2),
-        "look": (-0.6, 3.0, -2.6),
+        "look": above_ball(tier.get("apex", 4)),
     }
 
 
@@ -541,7 +568,7 @@ def load_pose(tier):
         "grip": (0.75, 0.5, -0.45),
         "bat": (0.25, 0.78, 0.6),
         "batUp": (0.4, 0.3, -1),
-        "look": (-0.4, 1.0, -2.8),
+        "look": above_ball(1.6),
     }
 
 
@@ -555,7 +582,7 @@ def plant_pose(tier):
         "grip": (0.55, 0.1, -0.7),
         "bat": (0.55, 0.42, 0.72),
         "batUp": (0.3, 0.5, -1),
-        "look": (-0.3, -0.2, -2.8),
+        "look": above_ball(0.4),
     }
 
 
@@ -750,9 +777,7 @@ def bake(keys, label, rate=BAKE_RATE):
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    for f in os.listdir(OUT_DIR):
-        if f.endswith(".rbxmx"):
-            os.remove(os.path.join(OUT_DIR, f))
+    before = {f for f in os.listdir(OUT_DIR) if f.endswith(".rbxmx")}
 
     # Stance: idle loop, whole body, Idle priority. The default walk and jump are Core priority
     # (below Idle), so SwingAnimator stops the stance while moving or in the air.
@@ -782,15 +807,18 @@ def main():
     for i, tier in enumerate(TIERS):
         h = HIT_STOPS[i]
         t_contact = round(CONTACT_AT - h, 4)
-        t_release, t_load, t_plant = 0.06, 0.13, 0.19
-        if t_plant >= t_contact - 0.02:
-            t_plant = t_contact - 0.03
-            t_load = min(t_load, t_plant - 0.05)
+        # Toss -> set into the stance while the ball rises -> load as it falls -> plant -> swing.
+        t_release = 0.12
+        t_set = round(CONTACT_AT * 0.5, 4)
+        t_load = round(CONTACT_AT - 0.3, 4)
+        t_plant = round(t_contact - 0.09, 4)
+        assert t_release < t_set < t_load < t_plant < t_contact, "CONTACT_AT too short for the toss"
         label = tier["name"]
         fin_spec = finish_pose(tier, i)
         keys = [
             (0.0, stance(), [], "smooth"),
-            (t_release, toss_pose(tier), ["Release"], "smooth"),
+            (t_release, toss_pose(tier), ["Release"], "out"),
+            (t_set, set_pose(tier), [], "smooth"),
             (t_load, load_pose(tier), [], "smooth"),
             (t_plant, plant_pose(tier), [], "in"),
             (t_contact, contact_pose(tier), ["Contact"], "hold" if h > 0 else "out"),
@@ -818,6 +846,11 @@ def main():
                            "finish": t_end, "point": contact})
 
     write_data(data_tiers)
+    # Files are overwritten in place (deleting them first upsets Rojo's live sync); only
+    # animations that no longer exist are removed.
+    written = {f"{n}.rbxmx" for n in ["FungoStance", "FungoCarry"] + [t["name"] for t in data_tiers]}
+    for f in before - written:
+        os.remove(os.path.join(OUT_DIR, f))
     for w in warnings:
         print("warning:", w)
     print(f"wrote {len(TIERS) + 2} animations; CONTACT_AT {CONTACT_AT}, hit-stops {HIT_STOPS}")

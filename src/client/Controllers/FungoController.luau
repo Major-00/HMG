@@ -206,7 +206,7 @@ local function startToss(): boolean
 	Remotes.Event("Swing"):FireServer(hitId)
 
 	local tier, tierIndex = Formulas.swingTier(data.power)
-	busyUntil = now + f.CYCLE
+	busyUntil = now + math.max(f.CYCLE, f.CONTACT_AT + 0.1) -- never a second toss mid-toss
 	local predicted = BallController.PredictDistance()
 	nextReadyAt = now + f.CONTACT_AT + Formulas.ballCamTime(predicted, Tuning.Reveal.MIN_SHOWN)
 

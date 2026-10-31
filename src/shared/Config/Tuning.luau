@@ -117,7 +117,10 @@ local Tuning = {
 	-- Fungo hitting: one tap = toss and swing in one motion. Every tap hits; distance comes from
 	-- stats only. The server times the next toss from the same numbers (Formulas.ballCamTime).
 	Fungo = {
-		CONTACT_AT = 0.25, -- seconds from the tap to the ball leaving the bat (after any hit-stop)
+		-- Seconds from the tap to the ball leaving the bat (after any hit-stop): the toss goes up,
+		-- the batter sets into the stance while it's in the air, loads and swings as it comes
+		-- down. The server times each cycle from this too (Pitchers/Fungo).
+		CONTACT_AT = 0.9,
 
 		-- The batter's animations (client/Modules/SwingAnimator). Paste each published id here as
 		-- "rbxassetid://<number>". Empty: in Studio the KeyframeSequence of the same name in
@@ -134,7 +137,7 @@ local Tuning = {
 				"", -- FungoSwingLaunch
 			},
 		},
-		CYCLE = 0.5, -- seconds from the tap to the end of the swing; the same at every tier
+		CYCLE = 1.2, -- seconds from the tap to the end of the swing; the same at every tier
 		TOSS_RISE = 0.55, -- share of the toss spent going up
 		STRIKE_FORWARD = 2.5, -- studs in front of the batter where the ball is hit
 		STRIKE_SIDE = 0.8, -- ... and this far to the batter's right
@@ -154,7 +157,7 @@ local Tuning = {
 			{
 				minPower = 0,
 				name = "pop",
-				tossHeight = 1.5,
+				tossHeight = 3,
 				hitStop = 0,
 				punch = 0,
 				crackVolume = 0.35,
@@ -167,7 +170,7 @@ local Tuning = {
 			{
 				minPower = 25,
 				name = "solid",
-				tossHeight = 2.2,
+				tossHeight = 3.6,
 				hitStop = 0.02,
 				punch = 2,
 				crackVolume = 0.5,
@@ -180,7 +183,7 @@ local Tuning = {
 			{
 				minPower = 200,
 				name = "crush",
-				tossHeight = 3,
+				tossHeight = 4.2,
 				hitStop = 0.035,
 				punch = 4,
 				crackVolume = 0.7,
@@ -193,7 +196,7 @@ local Tuning = {
 			{
 				minPower = 2000,
 				name = "blast",
-				tossHeight = 3.6,
+				tossHeight = 4.8,
 				hitStop = 0.05,
 				punch = 6,
 				crackVolume = 0.85,
@@ -206,7 +209,7 @@ local Tuning = {
 			{
 				minPower = 20000,
 				name = "launch",
-				tossHeight = 4.2,
+				tossHeight = 5.5,
 				hitStop = 0.06,
 				punch = 9,
 				crackVolume = 1,

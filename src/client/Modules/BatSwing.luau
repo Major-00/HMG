@@ -24,7 +24,7 @@ local playing: { [Instance]: boolean } = {}
 function BatSwing.Play(character: Model?, timing: Timing): boolean
 	local bat = character and character:FindFirstChild("Bat")
 	local grip = bat and bat:FindFirstChild("BatGrip")
-	if grip == nil or not grip:IsA("Weld") or grip.Part0 == nil or playing[grip] then
+	if grip == nil or not grip:IsA("JointInstance") or grip.Part0 == nil or playing[grip] then
 		return false
 	end
 	playing[grip] = true

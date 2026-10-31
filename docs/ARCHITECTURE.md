@@ -130,7 +130,9 @@ HMG/
 ├─ CLAUDE.md              design guardrails and hard rules
 ├─ docs/ARCHITECTURE.md
 ├─ assets/
-│  └─ Landmarks/          → ReplicatedStorage.Landmarks (one model per biome)
+│  ├─ Landmarks/          → ReplicatedStorage.Landmarks (one model per biome)
+│  └─ Animations/         → ReplicatedStorage.Animations: the batter's KeyframeSequences (generated)
+├─ tools/animations/      generate.py (the swing poses, solved and baked) + rig.json (R15 layout)
 └─ src/
    ├─ server/   → ServerScriptService.Server             (Script)
    │  ├─ init.server.luau    loads Services: Init() all, then Start() all
@@ -141,12 +143,44 @@ HMG/
    ├─ client/   → StarterPlayer.StarterPlayerScripts.Client (LocalScript)
    │  ├─ init.client.luau    loads Controllers: Init() all, then Start() all
    │  ├─ Controllers/
-   │  ├─ Modules/            client helpers that aren't controllers (MascotRig, MascotInfo, UILayout, BatSwing)
+   │  ├─ Modules/            client helpers that aren't controllers (MascotRig, MascotInfo, UILayout,
+   │  │                      BatSwing, SwingAnimator, SwingData)
    │  └─ PitcherVisuals/     how each "throw" pitcher looks and throws (cosmetic)
    └─ shared/   → ReplicatedStorage.Shared               (Folder)
       ├─ Remotes, Types, HookTypes, Formulas, Format, Signal, BatPose
       └─ Config/
 ```
+
+**Batter animations:** `tools/animations/generate.py` writes them; don't edit the `.rbxmx` files
+by hand. Each pose is a few readable numbers (hands, bat direction, feet, hips, where the head
+looks) in the batter's own frame; the script solves the joints (legs reach planted feet, both
+arms reach the bat, the head aims) and bakes every swing at 30 frames a second so hands stay on
+the bat and feet stay planted between poses. It reads `Fungo.CONTACT_AT` and each tier's
+`hitStop` from Tuning, so the `Contact` marker always sits at `CONTACT_AT - hitStop`. It also
+writes `src/client/Modules/SwingData.luau` (marker times and each tier's contact point). Run
+`python3 tools/animations/generate.py` after changing poses or those Tuning numbers.
+The experience must be **R15** (Game Settings → Avatar → Avatar Type: R15). R6 characters get
+the simple procedural swing. The poses are solved for the default body proportions; on other
+avatar scales the swing still plays and the ball launches from the bat's real position at the
+`Contact` marker, but hands and feet fit best with fixed default scales (Game Settings → Avatar →
+Scale: Height 100%, Width 100%, Head 100%, Body Type 0%, Proportions 0%).
+`ReplicatedStorage.Animations` is for Studio previews only: live servers delete it at startup, so
+clients never download it.
+
+**Publishing the animations** (they must be owned by whoever owns the experience, the user or
+its group, or they won't play in live servers; until then they play only in Studio):
+1. In Studio, with the place open and Rojo synced, find `ReplicatedStorage.Animations`.
+2. For each of the 7 KeyframeSequences (`FungoStance`, `FungoCarry`, `FungoSwingPop`,
+   `FungoSwingSolid`, `FungoSwingCrush`, `FungoSwingBlast`, `FungoSwingLaunch`): right-click →
+   **Save to Roblox…** (in newer Studio: **Publish to Roblox**), choose **Creator** = the
+   experience's owner (your account, or the group if the experience is in a group), give it the
+   same name, and submit. Copy the id it shows (or find it in Creator Hub → Development Items →
+   Animations).
+3. Paste each id into `src/shared/Config/Tuning.luau` → `Fungo.ANIMATIONS`, as
+   `"rbxassetid://<id>"`: `stance`, `carry`, and `swings` in tier order (Pop, Solid, Crush,
+   Blast, Launch).
+4. Commit. A set id always wins over the Studio preview. If you regenerate an animation, publish
+   it again (to the same asset with **Overwrite**, or as a new one and paste the new id).
 
 **Landmark models:** each is a file in `assets/Landmarks/`. They start as simple
 `.model.json` placeholders. To swap in a real one, build it in Studio, export it as
@@ -201,9 +235,11 @@ number along one straight track, so the server never needs the biome geometry.
 |---|---|
 | Controllers/StateController | Latest snapshot from the server; others read it. |
 | Controllers/InputController | No SWING button. A tap anywhere on the game view (not on buttons or menus), left click, Space (instead of jump) or gamepad R2 swings: `FungoController.Toss`, or with the machine, hits the pitch in play. While the ball-cam is away a tap skips the reveal. |
-| Controllers/FungoController | `Toss()`: one tap = toss and swing. Sends `Swing(tossId)` at the tap, faces the batter down the field, tosses the ball and swings (`BatSwing`), and launches at `Fungo.CONTACT_AT` from where the batter stands. One toss per cycle; a tap that comes before the server's minimum gap is held, not dropped. Power tiers (`Formulas.swingTier`, `Fungo.TIERS`) scale toss height, hit-stop (taken from the toss so launch time is fixed), camera punch (FOV), bat crack, sparks, dust and a shockwave. Visual and audio only. Auto-Swing will call `Toss`. |
+| Controllers/FungoController | `Toss()`: one tap = toss and swing. Sends `Swing(tossId)` at the tap, faces the batter down the field and roots them (walking stops until the ball leaves the bat), plays the tier's swing (`SwingAnimator`): the ball leaves the glove hand on `Release`, comes down onto the bat, `Contact` fires the crack, sparks, dust, shockwave and camera punch and starts the hit-stop, and the ball launches `Fungo.CONTACT_AT` (0.25s) after the tap from the animation's contact point. One toss per cycle; a tap that comes before the server's minimum gap is held, not dropped. Without animations (R6, or no ids in a live server) it plays the simple `BatSwing`. Visual and audio only. Auto-Swing will call `Toss`. |
+| Modules/SwingAnimator | The batter's animations on the local character (they replicate, so everyone sees them): `FungoStance` (Idle loop: bat on the shoulder, breathing, weight shift), `FungoCarry` (upper-body loop while walking) and one swing per Power tier (Action4: toss, load, swing, contact, follow-through; the tier changes the leg lift, hip turn and finish; the top tier points the bat at the sky and flips it). The stance plays only while standing on the ground (the default walk and jump are Core priority, below Idle). Two tracks per tier are used in turn, so a new toss blends out of the last follow-through. The finish pose is held until the camera is back (+1.2s); a new toss cancels it at once, and walking cuts it short. Animations are preloaded when the character spawns; a swing that isn't loaded yet falls back to the simple swing. Ids from `Fungo.ANIMATIONS`; in Studio, unpublished ones come from `ReplicatedStorage.Animations` through KeyframeSequenceProvider. |
+| Modules/SwingData | Generated: each swing's KeyframeSequence name, marker times and contact point (root space). |
 | Controllers/PitcherController | "throw" pitchers only: plays each `Pitch` using that pitcher's visual and keeps the pitch in play. |
-| Modules/BatSwing | The local bat swing (ready → contact → optional hit-stop hold → follow-through → ready), shared by Fungo and the machine path. |
+| Modules/BatSwing | The simple bat swing (ready → contact → optional hit-stop hold → follow-through → ready): the machine path and Fungo's fallback without animations. |
 | Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
 | Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. Shows the player's world and rebuilds when `stadiumTier` changes. |
 | Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hold on the landing for the catch reveal (time from the server's catch), swoop (or fade-cut when far) back to the batter. Fires `RevealStarted` / `RevealEnded`; takes the reveal's shot from `SetRevealCamera`. `SkipReveal` on tap; sends `Ready`. |
@@ -275,6 +311,7 @@ tap hits the pitch in play instead; everything after `SwingService` is the same.
   one (toss + air time + slow motion + reveal + return), the same numbers the client camera
   uses, both timed from the tap. The catch reveal is 1s (`Reveal.SHORT`), or 3s
   (`Reveal.FULL`) for a new Rare+ species. Taps while the camera is away only skip the reveal.
+  Biome 2 measured at 37.7s (hit 15) with a tap the moment each cycle opens and no skipping.
   The ball stays on the ground through the whole reveal (`Flight.LINGER_TIME`).
 - **The cycle is the same at every tier.** The ball always launches `Fungo.CONTACT_AT` after
   the tap; a bigger hit-stop is taken out of the toss, and a higher toss just moves faster.

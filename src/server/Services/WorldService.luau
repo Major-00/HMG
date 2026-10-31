@@ -317,12 +317,13 @@ local function giveBat(character: Model)
 	join.C0 = CFrame.new((BatPose.HANDLE_LENGTH + BatPose.BARREL_LENGTH) / 2 - 0.1, 0, 0)
 	join.Parent = barrel
 
-	local weld = Instance.new("Weld")
-	weld.Name = "BatGrip"
-	weld.Part0 = hand
-	weld.Part1 = handle
-	weld.C0 = BatPose.grip(BatPose.READY, hand.Name == "Right Arm")
-	weld.Parent = handle
+	-- A Motor6D, so the swing animations can move the bat (a pose named "Bat" under RightHand).
+	local grip = Instance.new("Motor6D")
+	grip.Name = "BatGrip"
+	grip.Part0 = hand
+	grip.Part1 = handle
+	grip.C0 = BatPose.grip(BatPose.READY, hand.Name == "Right Arm")
+	grip.Parent = handle
 	handle.Parent = character
 	barrel.Parent = character
 end

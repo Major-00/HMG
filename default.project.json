@@ -8,6 +8,9 @@
       },
       "Landmarks": {
         "$path": "assets/Landmarks"
+      },
+      "Animations": {
+        "$path": "assets/Animations"
       }
     },
     "ServerScriptService": {

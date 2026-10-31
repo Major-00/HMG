@@ -4,6 +4,16 @@
 -- Init sets up state with no cross-module calls; Start may use other modules.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+-- ReplicatedStorage.Animations holds the batter's KeyframeSequences for previewing in Studio
+-- (SwingAnimator). Live servers play the published ids instead, so clients never download it.
+if not RunService:IsStudio() then
+	local previews = ReplicatedStorage:FindFirstChild("Animations")
+	if previews then
+		previews:Destroy()
+	end
+end
 
 require(ReplicatedStorage.Shared.Remotes).CreateAll()
 

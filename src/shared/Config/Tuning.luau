@@ -117,7 +117,23 @@ local Tuning = {
 	-- Fungo hitting: one tap = toss and swing in one motion. Every tap hits; distance comes from
 	-- stats only. The server times the next toss from the same numbers (Formulas.ballCamTime).
 	Fungo = {
-		CONTACT_AT = 0.32, -- seconds from the tap to bat-on-ball (the ball launches then)
+		CONTACT_AT = 0.25, -- seconds from the tap to the ball leaving the bat (after any hit-stop)
+
+		-- The batter's animations (client/Modules/SwingAnimator). Paste each published id here as
+		-- "rbxassetid://<number>". Empty: in Studio the KeyframeSequence of the same name in
+		-- assets/Animations plays instead (tools/animations/generate.py makes them); in a live
+		-- server the simple swing plays. swings[i] is Power tier i (TIERS below).
+		ANIMATIONS = {
+			stance = "", -- FungoStance
+			carry = "", -- FungoCarry
+			swings = {
+				"", -- FungoSwingPop
+				"", -- FungoSwingSolid
+				"", -- FungoSwingCrush
+				"", -- FungoSwingBlast
+				"", -- FungoSwingLaunch
+			},
+		},
 		CYCLE = 0.5, -- seconds from the tap to the end of the swing; the same at every tier
 		TOSS_RISE = 0.55, -- share of the toss spent going up
 		STRIKE_FORWARD = 2.5, -- studs in front of the batter where the ball is hit
@@ -138,7 +154,7 @@ local Tuning = {
 			{
 				minPower = 0,
 				name = "pop",
-				tossHeight = 2.5,
+				tossHeight = 1.5,
 				hitStop = 0,
 				punch = 0,
 				crackVolume = 0.35,
@@ -151,8 +167,8 @@ local Tuning = {
 			{
 				minPower = 25,
 				name = "solid",
-				tossHeight = 4,
-				hitStop = 0.03,
+				tossHeight = 2.2,
+				hitStop = 0.02,
 				punch = 2,
 				crackVolume = 0.5,
 				crackPitch = 1.1,
@@ -164,8 +180,8 @@ local Tuning = {
 			{
 				minPower = 200,
 				name = "crush",
-				tossHeight = 6,
-				hitStop = 0.05,
+				tossHeight = 3,
+				hitStop = 0.035,
 				punch = 4,
 				crackVolume = 0.7,
 				crackPitch = 1,
@@ -177,8 +193,8 @@ local Tuning = {
 			{
 				minPower = 2000,
 				name = "blast",
-				tossHeight = 8,
-				hitStop = 0.07,
+				tossHeight = 3.6,
+				hitStop = 0.05,
 				punch = 6,
 				crackVolume = 0.85,
 				crackPitch = 0.9,
@@ -190,8 +206,8 @@ local Tuning = {
 			{
 				minPower = 20000,
 				name = "launch",
-				tossHeight = 10,
-				hitStop = 0.09,
+				tossHeight = 4.2,
+				hitStop = 0.06,
 				punch = 9,
 				crackVolume = 1,
 				crackPitch = 0.8,

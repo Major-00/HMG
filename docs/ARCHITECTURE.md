@@ -128,6 +128,7 @@ HMG/
    ├─ client/   → StarterPlayer.StarterPlayerScripts.Client (LocalScript)
    │  ├─ init.client.luau    loads Controllers: Init() all, then Start() all
    │  ├─ Controllers/
+   │  ├─ Modules/            client helpers that aren't controllers (MascotRig)
    │  └─ PitcherVisuals/     how each pitcher looks and throws (cosmetic)
    └─ shared/   → ReplicatedStorage.Shared               (Folder)
       ├─ Remotes, Types, HookTypes, Formulas, Format, Signal, BatPose
@@ -146,8 +147,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Piece | Built by | Why |
 |---|---|---|
 | Batting lanes (pad, plate, batter spawn, pitching machine) | Server (`WorldService`) | Characters stand on them, so they must be physical and replicated. One lane per player (`Tuning.World.LANE_COUNT`, default 8), side by side along X; balls fly down +Z. Lane models are Persistent for streaming. |
-| Ballpark plots (10 seat pads, owner sign, upgrade spots) *(planned)* | Server (`WorldService`) | One per lane, inside the lane layout, so other players see your park. |
-| Seated Mascots and park upgrade props *(planned)* | Client (`ParkController`) from replicated seats and levels | Cheap part-built rigs. Far parks are hidden; low graphics turns off idle animation. |
+| Ballpark plots (10 seat pads in two rows facing the field, owner sign, upgrade spots) | Server (`WorldService`), behind each lane's plate (`Config/Park` layout) | Part of the lane model, so everyone sees every park. Nothing on it collides or can be queried, so it never blocks the player or the camera. The lane model carries `Owner` and `Seats` attributes. |
+| Seated Mascots *(upgrade props planned)* | Client (`ParkController`) from the lane's `Seats` attribute | Simple part-built rigs (`Modules/MascotRig`, shared with the catch reveal), rebuilt only when a seat changes, with a Cash/s tag shown up close. Parks over 140 studs from the camera aren't drawn; only your own Mascots bob, and not in low graphics. |
 | Biome strips (ground, side bands, simple props, start lines, lighting) | Client (`WorldController`) from `Config/Biomes` | Nothing to replicate. Each biome is cut into tiles (`Tuning.World.TILE_LENGTH`) and only tiles near the camera exist (`STREAM_AHEAD` / `STREAM_BEHIND`), pooled. Lighting and the Atmosphere blend to the biome under the camera. |
 | Landmarks | Client clones from `ReplicatedStorage.Landmarks` | Hand-made models, placed by config. |
 
@@ -165,7 +166,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/MascotService | Sets the catch phase: rolls species, variant and size on the server, updates the Index and lifetime count, places the catch with `MascotInventory`, checks the result before writing it, pays sales at full value. Handles the Sell, Lock, Move, Equip Best and Auto-Sell remotes (type-checked, 10 actions/s per player). |
 | Services/MascotInventory | Pure rules for seats, hotbar, On Deck, Auto-Sell, Lock, Sell, Move (swap) and Equip Best, plus `Check` (10 seats, 4 hotbar, every Mascot in exactly one slot). No services; tested by `Dev/MascotInventoryTest` (DevData `selftest`). |
 | Services/IncomeService | Pays `Formulas.cashRate` (seated Mascots × park × stadium tier) every second, and the capped offline payout at load; answers `GetWelcomeBack` once. DataService stamps `lastOnline` on every save (`profile.OnSave`). |
-| Services/ParkService *(planned)* | Park upgrades. |
+| Services/ParkService | Publishes each player's seated Mascots on their lane model (`Seats`: `species,variant,size` per seat, `;`-joined), once per frame when seats change. (Planned: park upgrades.) |
 | Services/BallService *(planned)* | Buys ball tiers with Cash (in order, permanent for the run). |
 | Services/BatService | Buy and equip bats with Cash. |
 | Services/PromotionService *(stub)* | Stadium promotion: check the requirement, reset run progress, keep every Mascot, raise the tier. |
@@ -193,7 +194,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/CatchRevealController | The catch reveal: a part-built placeholder Mascot (species color, rarity ring, variant mark, size scale) runs in, hops to catch the ball and turns to the camera while its name types in; the camera watches from its side. Full (3s, with NEW!, rarity, variant, size) for new Rare+ species, 1s otherwise. Visual only. Studio-only `RevealPreview` hook for screenshots. |
 | Controllers/HighlightController | Biome banner at the line crossing; distance popup; catch toast (after the reveal ends, or at once if there was none) and sold toasts; client `Landed` signal. |
 | Controllers/HudController | Power, Cash (and Cash/s), distance bar with biome markers, swing button. |
-| Controllers/ParkController *(planned)* | Draws seated Mascots and upgrade props on every plot; park upgrade buttons. |
+| Controllers/ParkController | Draws the seated Mascots in every park, with Cash/s tags; culls far parks; idle bob for your own. (Planned: upgrade props and buttons.) |
+| Modules/MascotRig | The placeholder Mascot model (species color, rarity disc, variant mark, size scale), shared by the catch reveal and the parks. |
 | Controllers/MascotController | Client side of the Mascot actions (Sell, Lock, Move, Equip Best, Auto-Sell): asks the server, shows "Sold X +$N". |
 | Controllers/MascotPanelController *(planned)* | Hotbar and On Deck bar, plus the Mascots panel: Sell, Lock, Equip Best, Auto-Sell toggle (calls MascotController). |
 | Controllers/IndexController *(planned)* | The Index: world and biome tabs, 8 cards per biome. |
@@ -218,7 +220,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Config/Mascots | Rarities, and species keyed by world then biome id: 6 per biome at launch (one per rarity), 8 Index slots. |
 | Config/Balls | Ball tiers in unlock order with base rarity weights (only the basic ball so far). |
 | Config/Stadium | The 4 stadium tiers with their Power and Cash multipliers (tiers 2–4 tuned in the promotion step). |
-| Config/Bats, Park *(Park planned)* | Catalog tables (ids, names, prices, multipliers). |
+| Config/Park | Ballpark layout (seats, sign, upgrade spots) and drawing distances. (Planned: upgrade prices and bonuses.) |
+| Config/Bats | Bat catalog (ids, names, prices, multipliers). |
 
 ## 5. The hit flow
 

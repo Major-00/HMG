@@ -1,6 +1,8 @@
 --!strict
 -- WorldService: builds the batting lanes at startup and gives each player their own lane.
--- A lane is a dirt pad, a home plate, a batter spawn, and a pitching machine.
+-- A lane is a dirt pad, a home plate, a batter spawn, a pitching machine, and the player's
+-- ballpark plot behind the plate (Config/Park): 10 seat pads, an owner sign, upgrade spots.
+-- The lane model carries the owner (attribute "Owner") and what's seated ("Seats").
 -- Lanes sit side by side along X; every ball flies along +Z from its lane's plate.
 -- Lane models are Persistent so streaming never hides a player's plate or machine.
 --   WorldService.GetLane(player)                  -> lane number or nil
@@ -10,6 +12,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BatPose = require(ReplicatedStorage.Shared.BatPose)
+local Park = require(ReplicatedStorage.Shared.Config.Park)
 local Tuning = require(ReplicatedStorage.Shared.Config.Tuning)
 
 local FOLDER_NAME = "BattingAreas"
@@ -37,6 +40,103 @@ end
 local function plateOrigin(lane: number): Vector3
 	local w = Tuning.World
 	return Vector3.new((lane - (w.LANE_COUNT + 1) / 2) * w.LANE_SPACING, 0, 0)
+end
+
+-- The ballpark plot behind the plate: a floor, a raised back row, 10 seat pads (each with a
+-- "Spot" attachment the client seats a Mascot on), an owner sign, and spots for upgrades.
+-- Nothing on it collides or can be queried, so it never blocks the player or the camera.
+local function buildPlot(lane: Model, origin: Vector3)
+	local L = Park.Layout
+	local plot = Instance.new("Model")
+	plot.Name = "Plot"
+
+	local function flat(props: { [string]: any }): Part
+		local p = part(props)
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Parent = plot
+		return p
+	end
+
+	flat({
+		Name = "Floor",
+		Size = Vector3.new(L.FLOOR_WIDTH, 0.2, L.FLOOR_DEPTH),
+		Position = origin + Vector3.new(0, 0.1, L.FLOOR_FRONT - L.FLOOR_DEPTH / 2),
+		Color = Color3.fromRGB(86, 150, 78),
+		Material = Enum.Material.Grass,
+	})
+	for rowIndex, row in L.ROWS do
+		if row.height > 0 then
+			flat({
+				Name = `Riser{rowIndex}`,
+				Size = Vector3.new(L.FLOOR_WIDTH - 2, row.height, 6),
+				Position = origin + Vector3.new(0, row.height / 2 + 0.2, row.z),
+				Color = Color3.fromRGB(150, 150, 160),
+				Material = Enum.Material.Concrete,
+			})
+		end
+	end
+
+	local seats = Instance.new("Folder")
+	seats.Name = "Seats"
+	seats.Parent = plot
+	local seat = 0
+	for _, row in L.ROWS do
+		for _, x in L.SEAT_X do
+			seat += 1
+			local pad = flat({
+				Name = `Seat{seat}`,
+				Size = L.SEAT_SIZE,
+				Position = origin + Vector3.new(x, row.height + 0.2 + L.SEAT_SIZE.Y / 2, row.z),
+				Color = Color3.fromRGB(200, 60, 60),
+			})
+			pad.Parent = seats
+			local spot = Instance.new("Attachment")
+			spot.Name = "Spot"
+			-- On top of the pad, facing the field: a Mascot built facing -Z is turned to face +Z.
+			spot.CFrame = CFrame.new(0, L.SEAT_SIZE.Y / 2, 0) * CFrame.Angles(0, math.pi, 0)
+			spot.Parent = pad
+		end
+	end
+
+	local post = flat({
+		Name = "SignPost",
+		Size = Vector3.new(0.6, L.SIGN_HEIGHT, 0.6),
+		Position = origin + Vector3.new(0, L.SIGN_HEIGHT / 2 + 0.2, L.SIGN_Z),
+		Color = Color3.fromRGB(110, 80, 50),
+		Material = Enum.Material.Wood,
+	})
+	-- Behind the back row and above everyone's heads, so it never covers a Mascot.
+	local sign = Instance.new("BillboardGui")
+	sign.Name = "OwnerSign"
+	sign.Size = UDim2.fromOffset(220, 48)
+	sign.StudsOffset = Vector3.new(0, L.SIGN_HEIGHT / 2 + 1.5, 0)
+	sign.MaxDistance = 120
+	sign.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.Name = "Owner"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
+	label.BackgroundTransparency = 0.25
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Text = "Open ballpark"
+	label.Parent = sign
+	Instance.new("UICorner").Parent = label
+	sign.Parent = post
+
+	-- Upgrade1..5 attachments on the floor mark where park upgrades will stand.
+	local floor = plot:FindFirstChild("Floor") :: BasePart
+	for i, at in L.UPGRADE_SPOTS do
+		local marker = Instance.new("Attachment")
+		marker.Name = `Upgrade{i}`
+		marker.Parent = floor
+		marker.WorldPosition = origin + at
+	end
+
+	plot.Parent = lane
 end
 
 local function buildLane(lane: number): Model
@@ -109,7 +209,15 @@ local function buildLane(lane: number): Model
 	release.WorldPosition = machineAt + Vector3.new(0, w.STRIKE_HEIGHT, -2.4)
 	machine.Parent = model
 
+	buildPlot(model, origin)
 	return model
+end
+
+local function setOwnerSign(lane: number, text: string)
+	local label = laneModels[lane]:FindFirstChild("Owner", true)
+	if label and label:IsA("TextLabel") then
+		label.Text = text
+	end
 end
 
 local function assignLane(player: Player)
@@ -119,6 +227,8 @@ local function assignLane(player: Player)
 			playerLane[player] = lane
 			player:SetAttribute("Lane", lane)
 			player.RespawnLocation = laneModels[lane]:FindFirstChild("BatterSpawn") :: SpawnLocation
+			laneModels[lane]:SetAttribute("Owner", player.UserId)
+			setOwnerSign(lane, `{player.DisplayName}'s Ballpark`)
 			return
 		end
 	end
@@ -130,6 +240,10 @@ local function releaseLane(player: Player)
 	playerLane[player] = nil
 	if lane and laneOwner[lane] == player then
 		laneOwner[lane] = nil
+		local model = laneModels[lane]
+		model:SetAttribute("Owner", nil)
+		model:SetAttribute("Seats", nil) -- empties the park for everyone
+		setOwnerSign(lane, "Open ballpark")
 	end
 end
 
@@ -202,6 +316,15 @@ end
 
 function WorldService.GetLane(player: Player): number?
 	return playerLane[player]
+end
+
+-- Publishes what sits in a player's ballpark seats (a short encoded string, see ParkService) on
+-- their lane model, so every client can draw every park. Display only.
+function WorldService.SetParkSeats(player: Player, encoded: string)
+	local lane = playerLane[player]
+	if lane and laneOwner[lane] == player then
+		laneModels[lane]:SetAttribute("Seats", encoded)
+	end
 end
 
 function WorldService.GetLandingPosition(player: Player, distance: number): Vector3

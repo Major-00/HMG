@@ -19,12 +19,11 @@ local Tuning = require(Config:WaitForChild("Tuning"))
 
 local BallController = require(script.Parent.BallController)
 local CameraController = require(script.Parent.CameraController)
+local MascotRig = require(script.Parent.Parent:WaitForChild("Modules"):WaitForChild("MascotRig"))
 
 local GROUND_Y = 0
 local UP = Vector3.yAxis
-local REACH = 1.45 -- studs (times its size) in front of its feet where it holds the ball
-
-type Piece = { part: BasePart, offset: CFrame }
+local REACH = MascotRig.REACH
 
 type Reveal = {
 	hitId: number,
@@ -40,9 +39,7 @@ type Reveal = {
 	side: number, -- 1 or -1: which side it came in from (the camera sits on that side)
 	runEnd: number, -- seconds: reaches the ball
 	caught: boolean,
-	model: Model,
-	pieces: { Piece },
-	carried: BasePart, -- the ball in the Mascot's hands, shown from the catch
+	rig: MascotRig.Rig, -- its carried ball is shown from the catch
 	name: string,
 	sub: string,
 	color: Color3,
@@ -66,92 +63,11 @@ local function lookupIn(list: { any }, id: string): any?
 	return nil
 end
 
--- A placeholder Mascot: round body and head in the species color, eyes, ears, feet, a ring in
--- the rarity color, and a mark for its variant. Built around a root at its feet facing -Z.
-local function buildRig(
-	species: any,
-	rarityColor: Color3,
-	variant: string,
-	s: number
-): (Model, { Piece }, BasePart)
-	local model = Instance.new("Model")
-	model.Name = "RevealMascot"
-	local pieces: { Piece } = {}
-
-	local function piece(
-		shape: Enum.PartType,
-		size: Vector3,
-		at: Vector3,
-		color: Color3,
-		material: Enum.Material?,
-		rot: CFrame?
-	): BasePart
-		local p = Instance.new("Part")
-		p.Shape = shape
-		p.Size = size * s
-		p.Color = color
-		p.Material = material or Enum.Material.SmoothPlastic
-		p.Anchored = true
-		p.CanCollide = false
-		p.CanQuery = false
-		p.CanTouch = false
-		p.CastShadow = false
-		p.Parent = model
-		table.insert(pieces, { part = p, offset = CFrame.new(at * s) * (rot or CFrame.identity) })
-		return p
-	end
-
-	local body = species.color
-	local light = body:Lerp(Color3.new(1, 1, 1), 0.45)
-	local ball = Enum.PartType.Ball
-	piece(ball, Vector3.new(2.4, 2.4, 2.4), Vector3.new(0, 1.4, 0), body)
-	piece(ball, Vector3.new(1.5, 1.5, 1.5), Vector3.new(0, 1.3, -0.55), light) -- tummy
-	piece(ball, Vector3.new(1.9, 1.9, 1.9), Vector3.new(0, 3.1, -0.1), body) -- head
-	piece(ball, Vector3.new(0.38, 0.38, 0.38), Vector3.new(-0.38, 3.25, -0.9), Color3.new(0.08, 0.08, 0.1))
-	piece(ball, Vector3.new(0.38, 0.38, 0.38), Vector3.new(0.38, 3.25, -0.9), Color3.new(0.08, 0.08, 0.1))
-	piece(ball, Vector3.new(0.7, 0.7, 0.7), Vector3.new(-0.6, 4.0, 0), body) -- ears
-	piece(ball, Vector3.new(0.7, 0.7, 0.7), Vector3.new(0.6, 4.0, 0), body)
-	-- Feet: blocks, since Roblox makes every Ball part perfectly round.
-	piece(Enum.PartType.Block, Vector3.new(0.8, 0.4, 1.1), Vector3.new(-0.55, 0.2, -0.15), light)
-	piece(Enum.PartType.Block, Vector3.new(0.8, 0.4, 1.1), Vector3.new(0.55, 0.2, -0.15), light)
-	local ring = piece(
-		Enum.PartType.Cylinder,
-		Vector3.new(0.1, 3.6, 3.6),
-		Vector3.new(0, 0.06, 0),
-		rarityColor,
-		Enum.Material.SmoothPlastic, -- plain color: neon washes out to white in daylight
-		CFrame.Angles(0, 0, math.rad(90))
-	)
-	ring.Transparency = 0.15
-
-	local gold = Color3.fromRGB(255, 200, 60)
-	if variant == "allStar" then
-		piece(ball, Vector3.new(0.6, 0.6, 0.6), Vector3.new(0, 4.6, 0), gold, Enum.Material.Neon)
-	elseif variant == "goldGlove" then
-		piece(ball, Vector3.new(1, 1, 1), Vector3.new(1.15, 1.6, -0.6), gold, Enum.Material.Metal)
-	elseif variant == "hallOfFame" then
-		local crown = piece(
-			Enum.PartType.Cylinder,
-			Vector3.new(0.5, 1.5, 1.5),
-			Vector3.new(0, 4.05, -0.1),
-			gold,
-			Enum.Material.Neon,
-			CFrame.Angles(0, 0, math.rad(90))
-		)
-		crown.Transparency = 0.1
-	end
-
-	local carried =
-		piece(ball, Vector3.new(1, 1, 1), Vector3.new(0, 1.9, -REACH), Color3.fromRGB(250, 250, 245))
-	carried.Transparency = 1
-	return model, pieces, carried
-end
-
 local function cleanup()
 	local reveal = active
 	active = nil
 	if reveal then
-		reveal.model:Destroy()
+		reveal.rig.model:Destroy()
 	end
 	nameLabel.Visible = false
 	subLabel.Visible = false
@@ -169,15 +85,18 @@ local function onRevealStarted(hitId: number, landing: Vector3, seconds: number,
 	local r = Tuning.Reveal
 	local full = seconds > r.SHORT
 	local rarity = Mascots.Rarities[Mascots.RarityRank[species.rarity] or 1]
-	local s = r.SIZE_SCALE[catch.size] or 1
+	local s = MascotRig.Scale(catch.size)
 
 	-- Run in from ahead of the ball and a little to one side.
 	local side = if rng:NextNumber() < 0.5 then -1 else 1
 	local away = Vector3.new(side * 0.5, 0, 1).Unit
 	local ballPos = Vector3.new(landing.X, GROUND_Y, landing.Z)
 	local runLength = (if full then r.RUN_FROM_FULL else r.RUN_FROM_SHORT) * math.max(s, 1)
-	local model, pieces, carried = buildRig(species, rarity.color, catch.variant, s)
-	model.Parent = folder
+	local rig = MascotRig.Build(catch)
+	if rig == nil then
+		return
+	end
+	rig.model.Parent = folder
 
 	local sub = { rarity.displayName }
 	if full then
@@ -207,9 +126,7 @@ local function onRevealStarted(hitId: number, landing: Vector3, seconds: number,
 		side = side,
 		runEnd = seconds * r.RUN_PORTION,
 		caught = false,
-		model = model,
-		pieces = pieces,
-		carried = carried,
+		rig = rig,
 		name = species.displayName,
 		sub = table.concat(sub, "  ·  "),
 		color = rarity.color,
@@ -274,13 +191,11 @@ local function step()
 		camera.CFrame = shot(reveal.hitId, t) or camera.CFrame
 	end
 	local root = pose(reveal, t)
-	for _, piece in reveal.pieces do
-		piece.part.CFrame = root * piece.offset
-	end
+	MascotRig.Pose(reveal.rig, root)
 
 	if not reveal.caught and t >= reveal.runEnd then
 		reveal.caught = true
-		reveal.carried.Transparency = 0
+		reveal.rig.carried.Transparency = 0
 		BallController.HideBall(reveal.hitId)
 	end
 

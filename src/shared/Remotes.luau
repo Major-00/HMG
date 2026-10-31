@@ -27,6 +27,7 @@ Remotes.Functions = {
 	"MoveMascot", -- (uid: string, place: "seats" | "hotbar" | "onDeck", slot: number); swaps if taken
 	"EquipBest", -- () seats the top 10 earners
 	"SetAutoSell", -- (on: boolean) sells nothing by itself
+	"MarkIndexSeen", -- () every caught species counts as seen in the Index (clears the "new" dot)
 	"GetWelcomeBack", -- () -> { seconds, cash } once after offline earnings were paid, else nil
 }
 

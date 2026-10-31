@@ -163,7 +163,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/PitchService | **Pitcher slot.** Holds each player's active Pitcher, schedules pitches, keeps the one pending pitch, and brings the next pitch forward on `Ready` (never inside the minimum gap). |
 | Services/SwingService | Handles `Swing`: matches it to the pending pitch, adds Power, makes the hit's first flight segment, queues the next pitch after the ball-cam and reveal. |
 | Services/LandingService | **On-land hook.** Runs the push handlers, then the catch phase (`SetCatcher`), then fires `Landed` with the final distance, biome and catch. |
-| Services/MascotService | Sets the catch phase: rolls species, variant and size on the server, updates the Index and lifetime count, places the catch with `MascotInventory`, checks the result before writing it, pays sales at full value. Handles the Sell, Lock, Move, Equip Best and Auto-Sell remotes (type-checked, 10 actions/s per player). |
+| Services/MascotService | Sets the catch phase: rolls species, variant and size on the server, updates the Index and lifetime count, places the catch with `MascotInventory`, checks the result before writing it, pays sales at full value. Handles the Sell, Lock, Move, Equip Best, Auto-Sell and MarkIndexSeen remotes (type-checked, 10 actions/s per player). |
 | Services/MascotInventory | Pure rules for seats, hotbar, On Deck, Auto-Sell, Lock, Sell, Move (swap) and Equip Best, plus `Check` (10 seats, 4 hotbar, every Mascot in exactly one slot). No services; tested by `Dev/MascotInventoryTest` (DevData `selftest`). |
 | Services/IncomeService | Pays `Formulas.cashRate` (seated Mascots × park × stadium tier) every second, and the capped offline payout at load; answers `GetWelcomeBack` once. DataService stamps `lastOnline` on every save (`profile.OnSave`). |
 | Services/ParkService | Publishes each player's seated Mascots on their lane model (`Seats`: `species,variant,size` per seat, `;`-joined), once per frame when seats change, and its upgrade levels (`Park`). Handles `BuyParkUpgrade`: the next level with Cash, up to 10. |
@@ -202,7 +202,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/MascotPanelController | The Mascots panel (button above the hotbar): Seated / Hotbar tabs with one fixed row per slot (rows never move under your finger), Equip Best, Auto-Sell, and per-Mascot Seat it / Swap in, Lock, Sell. Left side only, so SWING stays reachable; it takes taps on itself. |
 | Modules/MascotInfo | How a Mascot is described in the UI, which slot a move targets, and the Sell button (second tap for Rare+, ignores taps on a just-drawn button, resets if refused). |
 | Modules/UILayout | Shared screen layout (hotbar height, margins) so toasts, reveal text and the panel stay clear of the hotbar and SWING. |
-| Controllers/IndexController *(planned)* | The Index: world and biome tabs, 8 cards per biome. |
+| Controllers/IndexController | The Index (third panel button, red dot for unseen species): a ◀ biome ▶ switcher and 8 cards per biome. Caught: color, name, rarity, count, variants and sizes found, NEW badge; uncaught: silhouette with its rarity; open slots: Coming soon. Permanent: cards stay after selling. Opening it marks species seen. |
 | Controllers/ShopController | The Shop panel (button beside Mascots; one side panel at a time): Balls with each tier's rarity odds at your best distance (`Formulas.rarityOdds`, the numbers the server rolls with), and Bats. Park: the five upgrades with level, bonus and next cost, and the total park bonus. Shows the new-ball notice and makes the Shop button glow. |
 | Controllers/WelcomeBackController | Shows the offline payout for 4s; never covers SWING and ignores taps. |
 | Controllers/PromotionController *(stub)* | Promotion panel: requirement, what resets, what's kept, what the new tier gives. |
@@ -328,6 +328,7 @@ rows don't exist yet.
 | C → S | `SellMascot` / `LockMascot` | Function | `uid` (+ `locked`) → `{ ok, err?, cash?, species? }`; selling a locked Mascot is refused |
 | C → S | `MoveMascot` | Function | `uid, place, slot` (`"seats"`, `"hotbar"` or `"onDeck"`; swaps if taken, which is also the On Deck swap) → `{ ok, err? }` |
 | C → S | `EquipBest` / `SetAutoSell` | Function | (`on`) → `{ ok, err? }` |
+| C → S | `MarkIndexSeen` | Function | () → `{ ok }`: every caught species counts as seen (server copies its own Index) |
 | C → S | `Promote` *(planned)* | Function | → `{ ok, err? }` |
 | S → C | `Pitch` | Event | `Pitch` (see HookTypes) |
 | S → C | `HitResult` | Event | `{ hitId, powerGained, pitcherBonus, segments, distance, biomeIndex, catch? }`. `catch` = `HookTypes.Catch`: `{ uid, species, rarity, variant, size, cashPerSec, placedIn, slot?, isNewSpecies, sold? }` |
@@ -365,7 +366,7 @@ adds missing keys, so the wipe is explicit.
   index = { ["species"] = { count = 1, variants = { none = true }, sizes = { normal = true } } },
   stadiumTier = 1,                                -- tier N plays World N
   pitcher = "pitching_machine",
-  settings = { music = true, sfx = true, lowGraphics = false, tipsSeen = {} },
+  settings = { music = true, sfx = true, lowGraphics = false, tipsSeen = {}, indexSeen = {} },
   -- lifetime, never reset
   lifetime = { swings = 0, cashEarned = 0, mascotsCaught = 0, bestDistance = 0 },
   firstJoin = 0, lastJoin = 0, lastOnline = 0,

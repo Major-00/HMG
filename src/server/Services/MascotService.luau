@@ -297,6 +297,22 @@ function MascotService.Start()
 		end
 		return MascotService.SetAutoSell(player, on)
 	end)
+	-- The player opened the Index: every species caught so far counts as seen (clears "new").
+	-- Display bookkeeping only; the server copies its own Index, the client sends nothing.
+	handle("MarkIndexSeen", function(player)
+		local data = DataService.Get(player)
+		if data == nil then
+			return { ok = false, err = "not loaded" }
+		end
+		DataService.Update(player, "settings", function(settings)
+			settings.indexSeen = settings.indexSeen or {}
+			for species in data.index do
+				settings.indexSeen[species] = true
+			end
+			return settings
+		end)
+		return { ok = true }
+	end)
 
 	Players.PlayerRemoving:Connect(function(player)
 		budget[player] = nil

@@ -54,6 +54,7 @@ export type PlayerData = {
 		sfx: boolean,
 		lowGraphics: boolean,
 		tipsSeen: { [string]: boolean }, -- one-time tutorial tips already shown
+		indexSeen: { [string]: boolean }, -- Index cards already looked at; caught but not here = "new"
 	},
 
 	-- Lifetime stats (never reset)

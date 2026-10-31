@@ -45,6 +45,7 @@ local Template: Types.PlayerData = {
 		sfx = true,
 		lowGraphics = false,
 		tipsSeen = {},
+		indexSeen = {}, -- species whose Index card the player has looked at (for the "new" dot)
 	},
 
 	-- Lifetime stats (never reset)

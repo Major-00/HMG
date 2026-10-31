@@ -104,6 +104,30 @@ Mascots.Worlds = {
 	},
 } :: { { [string]: { Species } } }
 
+-- World 2 (placeholder): a copy of World 1's species under World 2's biome ids, with their own
+-- ids ("w2_..."), "Dusk" names and hue-shifted colors. Same rarities. They earn more through
+-- Tuning.Catch.WORLD_CASH. Real World 2 Mascots come later.
+do
+	local world2 = {}
+	for biomeId, list in Mascots.Worlds[1] do
+		local copies = {}
+		for _, species in list do
+			local h, sat, v = species.color:ToHSV()
+			table.insert(
+				copies,
+				s(
+					`w2_{species.id}`,
+					`Dusk {species.displayName}`,
+					species.rarity,
+					Color3.fromHSV((h + 0.55) % 1, sat, v)
+				)
+			)
+		end
+		world2[`dusk_{biomeId}`] = copies
+	end
+	Mascots.Worlds[2] = world2
+end
+
 -- Species id -> species, with world, biomeId and biomeIndex filled in.
 Mascots.ById = {} :: { [string]: Species }
 

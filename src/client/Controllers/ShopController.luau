@@ -100,7 +100,7 @@ end
 -- Where the odds are shown for: the player's best distance (Luck and biome follow it).
 local function oddsPlace(data: any): (number, number, number)
 	local distance = data.lifetime.bestDistance
-	local world = data.stadiumTier
+	local world = Formulas.world(data)
 	return world, Formulas.biomeIndexAt(distance, world), distance
 end
 

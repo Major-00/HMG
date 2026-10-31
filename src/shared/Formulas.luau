@@ -77,9 +77,15 @@ function Formulas.recordMilestone(previousBest: number, newBest: number): number
 	return passed
 end
 
--- The biome list for `world` (World 1 if that world doesn't exist yet).
+-- The world a save plays: its stadium tier, capped at the last world that exists. There's no
+-- way back to an earlier world (the tier only goes up).
+function Formulas.world(data: any): number
+	return math.clamp(math.floor(data.stadiumTier or 1), 1, #Biomes)
+end
+
+-- The biome list for `world` (default 1; past the last world, the last one).
 function Formulas.biomes(world: number?): { HookTypes.BiomeConfig }
-	return Biomes[world or 1] or Biomes[1]
+	return Biomes[math.clamp(world or 1, 1, #Biomes)]
 end
 
 -- Index (1-based, Config/Biomes order) of the biome at `distance` in `world` (default 1).
@@ -212,7 +218,7 @@ function Formulas.catchOdds(
 		end
 	end
 	local biome = Formulas.biomes(world)[biomeIndex]
-	local worldMascots = Mascots.Worlds[world] or Mascots.Worlds[1]
+	local worldMascots = Mascots.Worlds[math.clamp(world, 1, #Mascots.Worlds)]
 	local list = if biome then worldMascots[biome.id] else nil
 	if list == nil or #list == 0 then
 		return {}
@@ -290,6 +296,7 @@ local function multiplierOf(list: { any }, id: string): number
 end
 
 -- Cash per second a Mascot earns while seated, before park upgrades and the stadium tier.
+-- Its world counts (WORLD_CASH), not the world the player is in now.
 -- `mascot` is a saved MascotEntry ({ species, variant, size, ... }); 0 for an unknown species.
 function Formulas.mascotCashPerSec(mascot: any): number
 	local species = Mascots.ById[mascot.species]
@@ -297,7 +304,9 @@ function Formulas.mascotCashPerSec(mascot: any): number
 		return 0
 	end
 	local c = Tuning.Catch
-	local base = (c.RARITY_CASH[species.rarity] or 0) * (c.BIOME_CASH[species.biomeIndex] or 1)
+	local base = (c.RARITY_CASH[species.rarity] or 0)
+		* (c.BIOME_CASH[species.biomeIndex] or 1)
+		* (c.WORLD_CASH[species.world] or 1)
 	return base * multiplierOf(c.VARIANTS, mascot.variant) * multiplierOf(c.SIZES, mascot.size)
 end
 

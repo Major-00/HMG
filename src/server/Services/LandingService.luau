@@ -15,6 +15,7 @@ local Formulas = require(Shared.Formulas)
 local HookTypes = require(Shared.HookTypes)
 local Signal = require(Shared.Signal)
 
+local DataService = require(script.Parent.DataService)
 local WorldService = require(script.Parent.WorldService)
 
 local LandingService = {}
@@ -30,13 +31,15 @@ local function context(
 	segments: { HookTypes.FlightSegment }
 ): HookTypes.LandingContext
 	local landedAt = segments[#segments].to
+	local data = DataService.Get(player)
+	local world = if data then Formulas.world(data) else 1
 	return {
 		player = player,
 		hitId = hitId,
 		segments = table.clone(segments),
 		landedAt = landedAt,
-		biomeIndex = Formulas.biomeIndexAt(landedAt),
-		biomeName = Formulas.biomeNameAt(landedAt),
+		biomeIndex = Formulas.biomeIndexAt(landedAt, world),
+		biomeName = Formulas.biomeNameAt(landedAt, world), -- in the player's world
 		position = WorldService.GetLandingPosition(player, landedAt),
 	}
 end

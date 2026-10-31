@@ -140,7 +140,7 @@ local function catchAt(ctx: HookTypes.LandingContext): HookTypes.Catch?
 		return nil
 	end
 	local odds =
-		Formulas.catchOdds(data.stadiumTier, Formulas.bestBall(data).id, ctx.biomeIndex, ctx.landedAt)
+		Formulas.catchOdds(Formulas.world(data), Formulas.bestBall(data).id, ctx.biomeIndex, ctx.landedAt)
 	local speciesId = Formulas.rollSpecies(odds, rng)
 	if speciesId == nil then
 		return nil -- no Mascots configured for this biome

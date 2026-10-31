@@ -19,7 +19,6 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = Shared:WaitForChild("Config")
-local Biomes = require(Config:WaitForChild("Biomes"))[1] -- World 1 (the world follows stadiumTier from the World 2 step)
 local Format = require(Shared:WaitForChild("Format"))
 local Formulas = require(Shared:WaitForChild("Formulas"))
 local Mascots = require(Config:WaitForChild("Mascots"))
@@ -31,10 +30,17 @@ local BallController = require(script.Parent.BallController)
 local UILayout = require(script.Parent.Parent:WaitForChild("Modules"):WaitForChild("UILayout"))
 local CameraController = require(script.Parent.CameraController)
 local HudController = require(script.Parent.HudController)
+local StateController = require(script.Parent.StateController)
 
 local LAUNCH_WAIT = 1 -- seconds to wait for a highlight's flight before showing the banner anyway
 local POPUP_LIFETIME = 1.4
 local POPUP_POOL = 3
+
+-- The player's world (stadium tier N plays World N), World 1 before the first snapshot.
+local function currentWorld(): number
+	local data = StateController.Get()
+	return if data then Formulas.world(data) else 1
+end
 
 type Popup = { anchor: Part, gui: BillboardGui, distance: TextLabel, biome: TextLabel, scale: UIScale }
 
@@ -105,7 +111,7 @@ playNextBanner = function()
 		return
 	end
 	bannerBusy = true
-	local biome = Biomes[index]
+	local biome = Formulas.biomes(currentWorld())[index]
 	bannerTitle.Text = string.upper(biome.displayName)
 	bannerTitle.TextColor3 = biome.visual.accent
 	bannerSub.Text = `NEW BIOME!  {Format.number(Tuning.BiomeStarts[index])} studs`
@@ -150,7 +156,7 @@ local function onHighlight(highlight: any)
 	local moment: Moment
 	if highlight.kind == "biome" then
 		local index = highlight.biomeIndex
-		if type(index) ~= "number" or Biomes[index] == nil then
+		if type(index) ~= "number" or Formulas.biomes(currentWorld())[index] == nil then
 			return
 		end
 		moment = {
@@ -243,12 +249,12 @@ local function showLanding(position: Vector3, distance: number)
 	local popup = popups[nextPopup]
 	nextPopup = nextPopup % #popups + 1
 
-	local index = Formulas.biomeIndexAt(distance)
+	local biome = Formulas.biomes(currentWorld())[Formulas.biomeIndexAt(distance, currentWorld())]
 	popup.anchor.Position = position
 	popup.anchor.Parent = worldFolder
 	popup.distance.Text = `{Format.number(distance)} studs`
-	popup.biome.Text = Biomes[index].displayName
-	popup.biome.TextColor3 = Biomes[index].visual.accent
+	popup.biome.Text = biome.displayName
+	popup.biome.TextColor3 = biome.visual.accent
 	popup.gui.Enabled = true
 	for _, l in { popup.distance, popup.biome } do
 		l.TextTransparency = 0
@@ -493,7 +499,7 @@ local function onTouchdown(
 		segmentIndex = segmentIndex,
 		position = position,
 		distance = distance,
-		biomeName = Formulas.biomeNameAt(distance),
+		biomeName = Formulas.biomeNameAt(distance, currentWorld()),
 		isFinal = isFinal,
 	})
 end

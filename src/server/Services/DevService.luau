@@ -75,7 +75,7 @@ local function simCatch(player: Player, n: number, distance: number): { [string]
 	if data == nil then
 		return nil
 	end
-	local world = data.stadiumTier
+	local world = Formulas.world(data)
 	local ball = Formulas.bestBall(data)
 	local biomeIndex = Formulas.biomeIndexAt(distance, world)
 	local odds = Formulas.catchOdds(world, ball.id, biomeIndex, distance)

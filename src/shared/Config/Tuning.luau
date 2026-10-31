@@ -128,9 +128,12 @@ local Tuning = {
 		},
 
 		-- Cash per second for a plain (no variant, normal size) Mascot:
-		--   RARITY_CASH[rarity] x BIOME_CASH[biomeIndex]
+		--   RARITY_CASH[rarity] x BIOME_CASH[biomeIndex] x WORLD_CASH[world]
 		RARITY_CASH = { common = 1, uncommon = 3, rare = 10, epic = 35, legendary = 150, mythic = 1000 },
 		BIOME_CASH = { 1, 3, 10, 40, 150, 600 },
+		-- x WORLD_CASH[world]: a World 2 Sandlot Common earns about what a World 1 Canyon Common
+		-- does, so World 2 catches are worth seating from the first swing.
+		WORLD_CASH = { 1, 1000 },
 
 		-- Sell value = this many seconds of the Mascot's earnings (variant and size included).
 		SELL_SECONDS = 30,

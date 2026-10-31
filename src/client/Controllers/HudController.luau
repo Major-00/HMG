@@ -14,7 +14,6 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = Shared:WaitForChild("Config")
-local Biomes = require(Config:WaitForChild("Biomes"))[1] -- World 1 (the world follows stadiumTier from the World 2 step)
 local Format = require(Shared:WaitForChild("Format"))
 local Formulas = require(Shared:WaitForChild("Formulas"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
@@ -56,11 +55,19 @@ local function label(props: { [string]: any }): TextLabel
 	return l
 end
 
+local barNames: { TextLabel } = {}
+
+-- The world the player is in (stadium tier N plays World N), World 1 before the first snapshot.
+local function currentWorld(): number
+	local data = StateController.Get()
+	return if data then Formulas.world(data) else 1
+end
+
 -- 0..1 position on the bar. Each biome gets an equal share, so early biomes aren't squashed.
 local function barPosition(distance: number): number
 	local starts = Tuning.BiomeStarts
-	local count = #Biomes
-	local index = Formulas.biomeIndexAt(distance)
+	local count = #Formulas.biomes(currentWorld())
+	local index = Formulas.biomeIndexAt(distance, currentWorld())
 	local from = starts[index]
 	local to = starts[index + 1]
 	local within = if to
@@ -134,8 +141,9 @@ local function build(): ScreenGui
 	bestMarker.Size = UDim2.new(0, 3, 1, 0)
 	bestMarker.Visible = false
 	bestMarker.Parent = bar
-	for i, biome in Biomes do
-		local x = (i - 1) / #Biomes
+	local biomes = Formulas.biomes(1) -- names follow the world (refreshWorld); every world has as many biomes
+	for i, biome in biomes do
+		local x = (i - 1) / #biomes
 		local tick = Instance.new("Frame")
 		tick.Name = `Marker{i}`
 		tick.BorderSizePixel = 0
@@ -143,13 +151,13 @@ local function build(): ScreenGui
 		tick.Position = UDim2.fromScale(x, 0)
 		tick.Size = UDim2.new(0, 2, 1, 6)
 		tick.Parent = bar
-		label({
+		barNames[i] = label({
 			Name = `Name{i}`,
 			Text = biome.displayName,
 			Font = Enum.Font.Gotham,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Position = UDim2.new(x, 4, 1, 4),
-			Size = UDim2.new(1 / #Biomes, -6, 0, 14),
+			Size = UDim2.new(1 / #biomes, -6, 0, 14),
 			Parent = bar,
 		})
 	end
@@ -284,8 +292,10 @@ end
 
 local function onHit(result: any)
 	barFill.Size = UDim2.fromScale(barPosition(result.distance), 1)
-	hitLabel.Text =
-		`Last hit: {Format.number(result.distance)} studs - {Formulas.biomeNameAt(result.distance)}`
+	hitLabel.Text = `Last hit: {Format.number(result.distance)} studs - {Formulas.biomeNameAt(
+		result.distance,
+		currentWorld()
+	)}`
 
 	popup.Text = `+{Format.number(result.powerGained)} Power`
 	popup.TextTransparency = 0
@@ -301,6 +311,15 @@ local function onHit(result: any)
 	(popupTween :: Tween):Play()
 end
 
+-- The bar's biome names for the current world.
+local function refreshWorld()
+	for i, biome in Formulas.biomes(currentWorld()) do
+		if barNames[i] then
+			barNames[i].Text = biome.displayName
+		end
+	end
+end
+
 function HudController.Init()
 	local gui = build()
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -311,6 +330,7 @@ function HudController.Start()
 		refresh()
 		refreshCash()
 		refreshRate()
+		refreshWorld()
 	end
 	StateController.Ready:Connect(refreshAll)
 	StateController.Changed:Connect(function(key: string)
@@ -320,6 +340,9 @@ function HudController.Start()
 			refreshCash()
 		elseif key == "seats" or key == "mascots" or key == "stadiumTier" or key == "park" then
 			refreshRate()
+		end
+		if key == "stadiumTier" then
+			refreshWorld()
 		end
 	end)
 	refreshAll()

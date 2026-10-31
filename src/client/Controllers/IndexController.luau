@@ -1,7 +1,8 @@
 --!strict
 -- IndexController: the Mascot Index, opened with the "Index" button (third beside Mascots and
 -- Shop; one side panel at a time, never over the SWING button).
---   A ◀ biome ▶ switcher for the current world, and that biome's 8 cards in a grid:
+--   World tabs (every world reached so far; it opens on the current one, and earlier worlds
+--   stay viewable), a ◀ biome ▶ switcher, and that biome's 8 cards in a grid:
 --     caught:      species color, name, rarity, how many caught, and the variants and sizes seen
 --     not caught:  a dark silhouette with only its rarity as a hint
 --     open slot:   "Coming soon" (biomes have 6 species at launch)
@@ -28,6 +29,10 @@ local MARGIN = UILayout.MARGIN
 local BUTTON_H = UILayout.PANEL_BUTTON.Y
 local CARD = Vector2.new(0.25, 118) -- a quarter of the width, this many points tall
 local DARK = Color3.fromRGB(45, 48, 58)
+local TAB_H = 26
+local TAB_W = 96
+local TAB_ON = Color3.fromRGB(150, 90, 200)
+local TAB_OFF = Color3.fromRGB(50, 56, 70)
 
 local IndexController = {}
 
@@ -37,6 +42,9 @@ local biomeLabel: TextLabel
 local totalLabel: TextLabel
 local openButton: TextButton
 local dot: Frame
+local tabRow: Frame
+local tabs: { TextButton } = {}
+local shownWorld: number? = nil -- the world tab picked; nil = the current world
 local biomeIndex = 1
 local newAtOpen: { [string]: boolean } = {} -- species that were new when the panel opened
 local knownIndex: { [string]: boolean } = {} -- species this client already knows are caught
@@ -75,8 +83,9 @@ local function text(parent: Instance, props: { [string]: any }): TextLabel
 	return l
 end
 
+-- The world the Index shows: the picked tab, or the current world.
 local function world(data: any): number
-	return data.stadiumTier
+	return math.clamp(shownWorld or Formulas.world(data), 1, Formulas.world(data))
 end
 
 -- Species caught but not yet seen in the Index.
@@ -216,7 +225,8 @@ local function updateDot()
 	dot.Visible = data ~= nil and next(newSpecies(data)) ~= nil
 end
 
-local function redraw()
+local redraw: () -> ()
+redraw = function()
 	updateDot()
 	local data = StateController.Get()
 	if data == nil or not panel.Visible then
@@ -226,10 +236,10 @@ local function redraw()
 	local biomes = Formulas.biomes(w)
 	biomeIndex = math.clamp(biomeIndex, 1, #biomes)
 	local biome = biomes[biomeIndex]
-	local list = (Mascots.Worlds[w] or Mascots.Worlds[1])[biome.id] or {}
+	local list = Mascots.Worlds[w][biome.id] or {}
 
 	local caughtHere, caughtAll, totalAll = 0, 0, 0
-	for _, speciesList in Mascots.Worlds[w] or Mascots.Worlds[1] do
+	for _, speciesList in Mascots.Worlds[w] do
 		for _, species in speciesList do
 			totalAll += 1
 			if data.index[species.id] then
@@ -245,6 +255,35 @@ local function redraw()
 	biomeLabel.Text = `{biome.displayName}  {caughtHere}/{#list}`
 	biomeLabel.TextColor3 = biome.visual.accent
 	totalLabel.Text = `World {w}: {caughtAll}/{totalAll} species caught`
+
+	-- One tab per world reached; there's no way back to play one, but its cards stay viewable.
+	local reached = Formulas.world(data)
+	for i = 1, math.max(reached, #tabs) do
+		local tab = tabs[i]
+		if tab == nil then
+			local index = i
+			tab = button(tabRow, `World {i}`, TAB_OFF, {
+				Name = `World{i}`,
+				LayoutOrder = i,
+				Size = UDim2.fromOffset(TAB_W, TAB_H),
+			})
+			tab.Activated:Connect(function()
+				shownWorld = index
+				biomeIndex = 1
+				redraw()
+			end)
+			tabs[i] = tab
+		end
+		tab.Visible = i <= reached
+		tab.BackgroundColor3 = if i == w then TAB_ON else TAB_OFF
+	end
+	-- The tab row only takes space once there's a second world to pick (small phones need it).
+	tabRow.Visible = reached > 1
+	local extra = if tabRow.Visible then TAB_H + 6 else 0
+	totalLabel.Position = UDim2.fromOffset(10, 8 + BUTTON_H + 4 + extra)
+	local top = 8 + BUTTON_H + 4 + extra + 18 + 6
+	grid.Position = UDim2.fromOffset(8, top)
+	grid.Size = UDim2.new(1, -8, 1, -(top + 8))
 
 	for _, child in grid:GetChildren() do
 		if child:IsA("Frame") then
@@ -329,15 +368,27 @@ function IndexController.Init()
 		Position = UDim2.new(1, -8, 0, 8),
 		Size = UDim2.fromOffset(BUTTON_H, BUTTON_H),
 	})
+	tabRow = Instance.new("Frame")
+	tabRow.Name = "WorldTabs"
+	tabRow.BackgroundTransparency = 1
+	tabRow.Position = UDim2.fromOffset(8, 8 + BUTTON_H + 6)
+	tabRow.Size = UDim2.new(1, -16, 0, TAB_H)
+	tabRow.Parent = panel
+	local tabLayout = Instance.new("UIListLayout")
+	tabLayout.FillDirection = Enum.FillDirection.Horizontal
+	tabLayout.Padding = UDim.new(0, 6)
+	tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	tabLayout.Parent = tabRow
+
 	totalLabel = text(panel, {
 		Name = "Total",
 		Font = Enum.Font.Gotham,
 		TextColor3 = Color3.fromRGB(200, 205, 215),
-		Position = UDim2.fromOffset(10, 8 + BUTTON_H + 4),
+		Position = UDim2.fromOffset(10, 8 + BUTTON_H + 6 + TAB_H + 4),
 		Size = UDim2.new(1, -20, 0, 18),
 	})
 
-	local top = 8 + BUTTON_H + 4 + 18 + 6
+	local top = 8 + BUTTON_H + 6 + TAB_H + 4 + 18 + 6
 	grid = Instance.new("ScrollingFrame")
 	grid.Name = "Cards"
 	grid.BackgroundTransparency = 1
@@ -357,6 +408,8 @@ function IndexController.Init()
 	local function show(visible: boolean)
 		panel.Visible = visible
 		if visible then
+			shownWorld = nil -- open on the current world, at its first biome
+			biomeIndex = 1
 			local data = StateController.Get()
 			newAtOpen = if data then newSpecies(data) else {}
 			markSeen()
@@ -396,6 +449,9 @@ function IndexController.Start()
 	StateController.Ready:Connect(redraw)
 	StateController.Changed:Connect(function(key: string)
 		if key == "index" or key == "settings" or key == "stadiumTier" then
+			if key == "stadiumTier" and shownWorld == nil then
+				biomeIndex = 1 -- the shown world just changed under the panel
+			end
 			local data = StateController.Get()
 			if key == "index" and data then
 				-- A species is new here if this client hadn't seen it in the Index yet. Compared

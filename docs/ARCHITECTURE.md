@@ -55,8 +55,13 @@ Space Dome. Each tier has two separate multipliers in `Config/Stadium`: Power ga
 and Cash/s.
 - **Resets:** Power, Cash, bats, balls, park upgrades and `highestBiome`.
 - **Kept:** every Mascot (seats, hotbar, On Deck, locks) and the Index.
-- **World:** tier N plays World N, with no way back. Only World 1 exists; World 2 starts as a
-  placeholder (World 1 recoloured, placeholder Mascots).
+- **World:** tier N plays World N, with no way back (`Formulas.world`; tiers past the last world
+  play the last one). World 2 is a placeholder: World 1 recoloured to dusk ("Dusk Sandlot" and
+  so on, same layout and landmarks) with 36 placeholder Mascots ("Dusk Dust Bunny", ids `w2_…`,
+  same rarities). Mascots earn × `Tuning.Catch.WORLD_CASH[world]` (World 2 ×1000), so a World 2
+  Sandlot Common earns about what a World 1 Canyon Common does. The world view, the distance bar,
+  biome banners, landing popups and catch rolls all follow the current world; the Index has a
+  tab per world reached.
 
 The confirm screen shows what resets and what the new tier gives. If promotions feel too soft,
 tune the Cash multiplier or park costs, never Mascot loss.
@@ -189,7 +194,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/InputController | Tap anywhere (not on menus) or the swing button launches the hit instantly and fires `Swing(pitchId)` once per pitch; swings the bat. |
 | Controllers/PitcherController | Shows the active pitcher and plays each `Pitch` using that pitcher's visual. |
 | Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
-| Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. |
+| Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. Shows the player's world and rebuilds when `stadiumTier` changes. |
 | Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hold on the landing for the catch reveal (time from the server's catch), swoop (or fade-cut when far) back to the batter. Fires `RevealStarted` / `RevealEnded`; takes the reveal's shot from `SetRevealCamera`. `SkipReveal` on tap; sends `Ready`. |
 | Controllers/CatchRevealController | The catch reveal: a part-built placeholder Mascot (species color, rarity ring, variant mark, size scale) runs in, hops to catch the ball and turns to the camera while its name types in; the camera watches from its side. Full (3s, with NEW!, rarity, variant, size) for new Rare+ species, 1s otherwise. Visual only. Studio-only `RevealPreview` hook for screenshots. |
 | Controllers/HighlightController | Biome banner at the line crossing; distance popup; catch toast (after the reveal ends, or at once if there was none) and sold toasts; client `Landed` signal. |
@@ -202,7 +207,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Controllers/MascotPanelController | The Mascots panel (button above the hotbar): Seated / Hotbar tabs with one fixed row per slot (rows never move under your finger), Equip Best, Auto-Sell, and per-Mascot Seat it / Swap in, Lock, Sell. Left side only, so SWING stays reachable; it takes taps on itself. |
 | Modules/MascotInfo | How a Mascot is described in the UI, which slot a move targets, and the Sell button (second tap for Rare+, ignores taps on a just-drawn button, resets if refused). |
 | Modules/UILayout | Shared screen layout (hotbar height, margins) so toasts, reveal text and the panel stay clear of the hotbar and SWING. |
-| Controllers/IndexController | The Index (third panel button, red dot for unseen species): a ◀ biome ▶ switcher and 8 cards per biome. Caught: color, name, rarity, count, variants and sizes found, NEW badge; uncaught: silhouette with its rarity; open slots: Coming soon. Permanent: cards stay after selling. Opening it marks species seen. |
+| Controllers/IndexController | The Index (third panel button, red dot for unseen species): world tabs (every world reached; opens on the current one), a ◀ biome ▶ switcher and 8 cards per biome. Caught: color, name, rarity, count, variants and sizes found, NEW badge; uncaught: silhouette with its rarity; open slots: Coming soon. Permanent: cards stay after selling. Opening it marks species seen. |
 | Controllers/ShopController | The Shop panel (button beside Mascots; one side panel at a time): Balls with each tier's rarity odds at your best distance (`Formulas.rarityOdds`, the numbers the server rolls with), and Bats. Park: the five upgrades with level, bonus and next cost, and the total park bonus. Shows the new-ball notice and makes the Shop button glow. |
 | Controllers/WelcomeBackController | Shows the offline payout for 4s; never covers SWING and ignores taps. |
 | Controllers/PromotionController | The Stadium button under the HUD stats (glows when you can promote) and the promotion panel: requirements with ticks, what the next tier gives, what's kept and what resets, and a Promote button pinned at the bottom (second tap confirms). |
@@ -220,8 +225,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Signal | Small server/client event utility used by the hooks. |
 | BatPose | Bat grip poses shared by server and client. |
 | Config/Tuning | **Every tunable number** (pitch timing, Power, distance, biome starts, lanes, streaming, ball-cam, highlights, swing, catch: Luck, variants, sizes, Cash/s, sell value; planned: reveal, offline). |
-| Config/Biomes | Biome visuals, keyed by world (`Biomes[1]` = World 1). |
-| Config/Mascots | Rarities, and species keyed by world then biome id: 6 per biome at launch (one per rarity), 8 Index slots. |
+| Config/Biomes | Biome visuals, keyed by world (`Biomes[1]` = World 1; `Biomes[2]` = World 1 recoloured to dusk, a placeholder). |
+| Config/Mascots | Rarities, and species keyed by world then biome id: 6 per biome at launch (one per rarity), 8 Index slots. World 2's are generated placeholders (`w2_…`). |
 | Config/Balls | 6 ball tiers in unlock order: price and base rarity weights. |
 | Config/Stadium | The 4 stadium tiers: Power and Cash multipliers (×1, ×2, ×4, ×8) and what promoting into each needs (Cash on hand and a biome reached this run). |
 | Config/Park | Ballpark layout (seats, sign, upgrade spots), drawing distances, and the five upgrades (base cost, cost growth, bonus per level; max level 10). |

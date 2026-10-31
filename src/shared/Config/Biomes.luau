@@ -1,6 +1,8 @@
 --!strict
 -- Biomes: each world's biomes in flight order, keyed by world (Biomes[1] = World 1).
--- Stadium tier N plays World N; only World 1 exists so far.
+-- Stadium tier N plays World N (tiers past the last world play the last one; Formulas.world).
+-- World 2 is a placeholder for now: World 1 recoloured to dusk (same layout, props and landmarks),
+-- with its own biome ids so its Mascots and Index cards are separate.
 -- WorldController builds each strip from this.
 -- landmark = model name under ReplicatedStorage.Landmarks (assets/Landmarks/).
 -- challenge = per-biome challenge slot, empty in the MVP.
@@ -259,6 +261,47 @@ local World1: { HookTypes.BiomeConfig } = {
 	},
 }
 
-local Biomes: { { HookTypes.BiomeConfig } } = { World1 }
+-- World 2 (placeholder): every color hue-shifted and dimmed, lighting moved to dusk.
+local W2 = {
+	HUE_SHIFT = 0.55, -- of the color wheel
+	VALUE = 0.85, -- brightness kept
+	CLOCK_TIME = 17.6, -- dusk (18 already reads as night)
+	BRIGHTNESS = 0.7, -- times World 1's
+	PREFIX = "Dusk",
+}
+
+local function shift(color: Color3): Color3
+	local h, s, v = color:ToHSV()
+	return Color3.fromHSV((h + W2.HUE_SHIFT) % 1, s, v * W2.VALUE)
+end
+
+local function recolor(value: any): any
+	if typeof(value) == "Color3" then
+		return shift(value)
+	elseif type(value) == "table" then
+		local copy = {}
+		for k, v in value do
+			copy[k] = recolor(v)
+		end
+		return copy
+	end
+	return value
+end
+
+local World2: { HookTypes.BiomeConfig } = {}
+for _, biome in World1 do
+	local visual = recolor(biome.visual)
+	visual.lighting.clockTime = W2.CLOCK_TIME
+	visual.lighting.brightness = biome.visual.lighting.brightness * W2.BRIGHTNESS
+	table.insert(World2, {
+		id = `dusk_{biome.id}`,
+		displayName = `{W2.PREFIX} {biome.displayName}`,
+		landmark = biome.landmark,
+		challenge = nil,
+		visual = visual,
+	})
+end
+
+local Biomes: { { HookTypes.BiomeConfig } } = { World1, World2 }
 
 return Biomes

@@ -73,7 +73,7 @@ local function button(parent: Instance, label: string, color: Color3, props: { [
 end
 
 local function biomeName(data: any, index: number): string
-	local biomes = Formulas.biomes(data.stadiumTier)
+	local biomes = Formulas.biomes(Formulas.world(data))
 	local biome = biomes[index] or biomes[#biomes]
 	return biome.displayName
 end
@@ -85,7 +85,7 @@ local function refresh()
 	end
 	local tier = Formulas.stadiumTier(data)
 	local status = Formulas.promotionStatus(data)
-	openButton.Text = `{tier.displayName} ▸`
+	openButton.Text = `{tier.displayName} >` -- "▸" isn't in the font
 	openButton.BackgroundColor3 = if status.ready then GOLD else IDLE
 	if not panel.Visible then
 		return

@@ -8,6 +8,8 @@
 --   * Each biome after the first gets a start line and two gate posts in its accent color.
 --   * Landmarks are cloned from ReplicatedStorage.Landmarks, one per biome, when near the camera.
 --   * Lighting and the Atmosphere blend to the biome under the camera.
+--   * It shows the player's world (Formulas.world: stadium tier N plays World N) and rebuilds
+--     everything when that changes after a promotion.
 -- Visual only: nothing here touches stats. Parts are pooled and reused.
 
 local Lighting = game:GetService("Lighting")
@@ -17,10 +19,11 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = Shared:WaitForChild("Config")
-local Biomes = require(Config:WaitForChild("Biomes"))[1] -- World 1 (the world follows stadiumTier from the World 2 step)
 local Formulas = require(Shared:WaitForChild("Formulas"))
 local HookTypes = require(Shared:WaitForChild("HookTypes"))
 local Tuning = require(Config:WaitForChild("Tuning"))
+
+local StateController = require(script.Parent.StateController)
 
 local GROUND_TOP = -0.05 -- just under the batting pads (top at 0) so they don't flicker
 local GROUND_THICKNESS = 1
@@ -43,6 +46,8 @@ local tiles: { [string]: Tile } = {}
 local landmarks: { [number]: Model } = {}
 local lastWindow: number? = nil
 local currentBiome: number? = nil
+local world = 1
+local Biomes = Formulas.biomes(world) -- the shown world's biomes
 local atmosphere: Atmosphere
 
 local W = Tuning.World
@@ -318,10 +323,43 @@ local function step()
 		stream(base - W.STREAM_BEHIND, base + WINDOW_STEP + W.STREAM_AHEAD)
 	end
 
-	local biome = Formulas.biomeIndexAt(math.max(z, 0))
+	local biome = Formulas.biomeIndexAt(math.max(z, 0), world)
 	if biome ~= currentBiome then
 		applyLighting(biome, currentBiome == nil)
 		currentBiome = biome
+	end
+end
+
+-- Switches to `newWorld`: every tile goes back to the pool and the next frame builds the new
+-- world's tiles, props and lighting. Prop models are dropped (their colors belong to the old world).
+local function setWorld(newWorld: number)
+	if newWorld == world then
+		return
+	end
+	world = newWorld
+	Biomes = Formulas.biomes(world)
+	for key, tile in tiles do
+		releaseTile(tile)
+		tiles[key] = nil
+	end
+	for key, pool in propPools do
+		for _, model in pool do
+			model:Destroy()
+		end
+		propPools[key] = nil
+	end
+	currentBiome = nil -- step() applies the new lighting next frame
+	-- Rebuild now, not next frame: the lane ground must never be missing while physics runs.
+	local window = math.floor(workspace.CurrentCamera.CFrame.Position.Z / WINDOW_STEP)
+	lastWindow = window
+	local base = window * WINDOW_STEP
+	stream(base - W.STREAM_BEHIND, base + WINDOW_STEP + W.STREAM_AHEAD)
+end
+
+local function followData()
+	local data = StateController.Get()
+	if data then
+		setWorld(Formulas.world(data))
 	end
 end
 
@@ -345,6 +383,13 @@ function WorldController.Start()
 		warn("[WorldController] ReplicatedStorage.Landmarks is missing; biomes will have no landmarks")
 	end
 	-- After the camera (and ball-cam) so streaming follows this frame's camera.
+	followData()
+	StateController.Ready:Connect(followData)
+	StateController.Changed:Connect(function(key: string)
+		if key == "stadiumTier" then
+			followData()
+		end
+	end)
 	RunService:BindToRenderStep("WorldStream", Enum.RenderPriority.Camera.Value + 2, step)
 end
 

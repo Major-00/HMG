@@ -1,7 +1,7 @@
 --!strict
 -- HookTypes: contracts for the swappable gameplay hooks.
 -- Types only. New pitchers, the Mascot catch, rare-catch clips and biome challenges plug in here.
--- Distances are in studs along the flight track, measured from home plate.
+-- Distances are in studs along the flight track, measured from the hit line (home plate).
 
 -- One pitch, decided by the server and sent to the client to draw (pitchers with mode "throw").
 -- A "toss" pitcher sends none: the player's tap starts each cycle.
@@ -45,7 +45,7 @@ export type LandingContext = {
 	landedAt: number, -- current landing distance (end of the last segment)
 	biomeIndex: number, -- biome under landedAt
 	biomeName: string, -- display name of that biome
-	position: Vector3, -- world position where the ball lands, in the player's lane
+	position: Vector3, -- where the ball lands, on the lane's centre line (the client uses the batter's X)
 	catch: Catch?, -- the Mascot caught, on the final context only (nil if the catch failed)
 }
 

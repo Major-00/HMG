@@ -5,7 +5,7 @@ highlights. The Mascot economy below is designed but not built yet. Modules mark
 *(planned)* are stubs or don't exist yet. Design guardrails and hard rules: [CLAUDE.md](../CLAUDE.md).
 
 Decisions so far:
-- Every tap is one swing: **Fungo hitting**. One tap tosses the ball up and hits it in one motion (about 0.5s), from anywhere in the lane's hitting circle. +1 Power (× multipliers), and the ball launches. No pitch to wait for, no charge-up, no timing, no indicator.
+- Every tap is one swing: **Fungo hitting**. One tap tosses the ball up and hits it in one motion (0.45s to contact), from anywhere in the shared hitting zone, even while walking. +1 Power (× multipliers), and the ball launches. No pitch to wait for, no charge-up, no timing, no indicator.
 - Every landing catches a Mascot. Seated Mascots earn Cash per second, the only income. Hits don't pay.
 - Saves use **ProfileStore**.
 - Biomes and Mascots are generated from config, keyed by world. Each biome references one hand-made landmark model (placeholders for now).
@@ -33,7 +33,7 @@ A Mascot's Cash/s and sell value are both base × variant × size. All odds and 
 in `Config/Mascots` and `Tuning.Catch`, and one shared function (`Formulas.catchOdds`) feeds
 both the server roll and every odds screen.
 
-**The park.** Each lane has a ballpark plot with 10 seats. Only seated Mascots earn. Park
+**The park.** Each lane (5 per server) has a ballpark plot with 10 seats, behind the shared hitting zone. Only seated Mascots earn. Park
 upgrades are Bleachers, Concessions, Scoreboard, Lights and Jumbotron, each up to 10 levels.
 Each level adds a % to the park's Cash rate. Costs live in `Config/Park`.
 
@@ -111,7 +111,7 @@ tune the Cash multiplier or park costs, never Mascot loss.
 - **Fungo hitting (replaces the pitching machine).** Waiting for a throw and standing on a
   mark made the first seconds feel like a timing game and pinned players in place. A one-tap
   self-toss starts the first swing the moment the save loads and lets players walk around the
-  hitting circle while they play, which helps the first minute (**bounce**) and makes the loop
+  hitting zone while they play, which helps the first minute (**bounce**) and makes the loop
   feel like theirs (**playtime**). Every tap still hits, the cycle time is fixed, and the
   swing's growing size with Power (toss height, hit-stop, camera punch, crack, particles,
   shockwave) is visual and audio only, a visible sign of progress that brings players back
@@ -120,6 +120,25 @@ tune the Cash multiplier or park costs, never Mascot loss.
   makes each new species a moment (**bounce**, **D1**). It's visual only, short (1s) unless the
   species is new and Rare or up, tappable to skip, and it replaces the existing landing hold,
   so pacing to Biome 2 stays under 60s.
+- **Hitting zone with free movement (replaces each lane's hitting circle).** Players were
+  rooted for every swing, so the character froze on each tap. Now one shared dirt zone sits
+  behind a hit line and you can tap from anywhere in it, walking or standing; the upper body
+  swings while the legs keep moving. The game answers your movement from the first tap, which
+  helps the first minute (**bounce**), and you can walk to your park and back between hits
+  without stopping the loop (**playtime**). Where you stand changes only where the ball's line
+  starts, never its distance, and a tap outside the zone still hits from the zone's edge. It
+  adds no way to fail.
+- **5-player servers (down from 8).** Fewer, closer parks make the space feel full and let
+  you see the other players' Mascots and swings at a glance, an easy social read that brings
+  players back (**D1**) and gives them someone to measure their park against (**D28**). It also
+  means fewer parks, seats and rigs to draw on low-end phones, which keeps the first minute
+  smooth (**bounce**). Nothing about a player's own loop changes, and a player who somehow has
+  no park still swings normally.
+- **Camera beat before the ball-cam.** The camera used to snap to the ball on the contact frame,
+  which hid the follow-through every time. It now holds on the batter for 0.25s, so the finish
+  pose and the swoosh are seen, then glides to the ball over 0.3s. Every hit's payoff is seen,
+  the reward that keeps players tapping (**bounce**, **playtime**), and it costs nothing in
+  pacing: the beat runs inside the ball's flight and the cycle is unchanged. Visual only.
 
 ## 2. Folder layout
 
@@ -147,7 +166,7 @@ HMG/
    │  │                      BatSwing, SwingAnimator, SwingData)
    │  └─ PitcherVisuals/     how each "throw" pitcher looks and throws (cosmetic)
    └─ shared/   → ReplicatedStorage.Shared               (Folder)
-      ├─ Remotes, Types, HookTypes, Formulas, Format, Signal, BatPose
+      ├─ Remotes, Types, HookTypes, Formulas, Format, Signal, BatPose, HitZone
       └─ Config/
 ```
 
@@ -161,8 +180,14 @@ overshoots, so planted feet don't drift), the swing keys carry their speed so th
 accelerates into contact and out of the hit-stop, and the upper body and head trail the hips a
 little (overlapping action) while the bat, hands and feet stay exact. The toss ball flies a real
 gravity arc (FungoController). It reads `Fungo.CONTACT_AT` and each tier's
-`hitStop` from Tuning, so the `Contact` marker always sits at `CONTACT_AT - hitStop`. It also
-writes `src/client/Modules/SwingData.luau` (marker times and each tier's contact point). Run
+`hitStop` and `tossHeight` from Tuning, so the `Contact` marker always sits at
+`CONTACT_AT - hitStop` and the swing's beats (toss, set, load, plant, launch, wrap, finish) are
+timed back from it. Each swing carries the markers `Release` (the toss), `Contact`, `Finish`,
+`SwooshOn` (at the plant) and `SwooshOff` (just after the wrap). For each full-body swing it also
+bakes an upper-body version (`FungoSwingUpper{Pop,Solid,Crush,Blast,Launch}`, the same timeline
+and contact point, hips facing forward) that plays over the walk. That makes **12 animations**:
+stance, carry, 5 full swings and 5 upper swings. It also writes `src/client/Modules/SwingData.luau`
+(each swing's name, upper-body name, length, marker times and contact point). Run
 `python3 tools/animations/generate.py` after changing poses or those Tuning numbers.
 The experience must be **R15** (Game Settings → Avatar → Avatar Type: R15). R6 characters get
 the simple procedural swing. The poses are solved for the default body proportions; on other
@@ -175,8 +200,9 @@ clients never download it.
 **Publishing the animations** (they must be owned by whoever owns the experience, the user or
 its group, or they won't play in live servers; until then they play only in Studio):
 1. In Studio, with the place open and Rojo synced, find `ReplicatedStorage.Animations`.
-2. For each of the 7 KeyframeSequences (`FungoStance`, `FungoCarry`, `FungoSwingPop`,
-   `FungoSwingSolid`, `FungoSwingCrush`, `FungoSwingBlast`, `FungoSwingLaunch`): right-click →
+2. For each of the 12 KeyframeSequences (`FungoStance`, `FungoCarry`, `FungoSwingPop`,
+   `FungoSwingSolid`, `FungoSwingCrush`, `FungoSwingBlast`, `FungoSwingLaunch`, and
+   `FungoSwingUpperPop` … `FungoSwingUpperLaunch`): right-click →
    **Save to Roblox…** (in newer Studio: **Publish to Roblox**), choose **Creator** = the
    experience's owner (your account, or the group if the experience is in a group), give it the
    same name, and submit. Copy the id it shows (or find it in Creator Hub → Development Items →
@@ -186,10 +212,21 @@ its group, or they won't play in live servers; until then they play only in Stud
    click "Click to share access" on the Output warning in Studio). The grant is permanent. A
    Studio play test warns about any animation that can't load.
 3. Paste each id into `src/shared/Config/Tuning.luau` → `Fungo.ANIMATIONS`, as
-   `"rbxassetid://<id>"`: `stance`, `carry`, and `swings` in tier order (Pop, Solid, Crush,
-   Blast, Launch).
-4. Commit. A set id always wins over the Studio preview. If you regenerate an animation, publish
-   it again (to the same asset with **Overwrite**, or as a new one and paste the new id).
+   `"rbxassetid://<id>"`: `stance`, `carry`, `swings` and `upperSwings` in tier order (Pop,
+   Solid, Crush, Blast, Launch).
+4. Commit. A set id always wins over the Studio preview, unless it's out of date (below).
+
+**After regenerating a swing:** re-publish each changed full-body swing over its existing asset
+(**Save to Roblox…** → **update existing** / **Overwrite**, pick the same asset), so the id and
+the experience's access stay and nothing in Tuning changes. A swing that's new, like the 5 upper
+swings, is published as a new asset: paste its id and grant the experience access (step 2).
+
+**Stale guard.** `SwingData` records each swing's length. When a published track loads and its
+length differs from SwingData's by more than 0.02s, it's treated as out of date (the repo was
+regenerated but the asset wasn't re-published), and the verdict is cached. In Studio that tier
+plays the repo's KeyframeSequence instead (logged once); in a live server it plays the simple
+swing, already with the new timing. A missing upper-body track just means the full-body swing
+plays while walking.
 
 **Landmark models:** each is a file in `assets/Landmarks/`. They start as simple
 `.model.json` placeholders. To swap in a real one, build it in Studio, export it as
@@ -202,8 +239,9 @@ number along one straight track, so the server never needs the biome geometry.
 
 | Piece | Built by | Why |
 |---|---|---|
-| Batting lanes (pad, plate, chalk hitting circle, batter spawn; the pitching machine only when it's the default pitcher) | Server (`WorldService`) | Characters stand on them, so they must be physical and replicated. One lane per player (`Tuning.World.LANE_COUNT`, default 8), side by side along X; balls fly down +Z. Lane models are Persistent for streaming. |
-| Ballpark plots (10 seat pads in two rows facing the field, owner sign, upgrade spots) | Server (`WorldService`), behind each lane's plate (`Config/Park` layout) | Part of the lane model, so everyone sees every park. Nothing on it collides or can be queried, so it never blocks the player or the camera. The lane model carries `Owner`, `Seats` and `Park` (upgrade levels) attributes. |
+| Hitting zone (`workspace.HittingZone`: one dirt strip across every lane, Z −18 to 0, with a chalk hit line at Z 0) | Server (`WorldService`) from `Tuning.World.HIT_ZONE` and `shared/HitZone` | Characters stand on it, so it must be physical and replicated. Persistent for streaming, and outside `BattingAreas`. Players walk anywhere in it and tap; a tap from outside it hits from the nearest point of the zone. Distances are measured from the hit line, and balls fly down +Z. |
+| Batting lanes (batter spawn inside the zone in front of the player's own plot, a hidden `StrikePoint` attachment at (laneX, STRIKE_HEIGHT, 0) kept for the machine path; the pad, plate and pitching machine only when the machine is the default pitcher) | Server (`WorldService`) | One lane per player (`Tuning.World.LANE_COUNT` = 5, at X −60 to 60), side by side along X. The place's **Max Players must be set to 5** to match (Creator Hub → experience → Places → the place → Configure; code can't set it). A player who somehow has no lane still swings normally and gets a one-time "ballpark is full" toast. Lane models are Persistent for streaming. |
+| Ballpark plots (10 seat pads in two rows facing the field, owner sign, upgrade spots) | Server (`WorldService`), behind the hitting zone at Z −22 to −49, one per lane (`Config/Park` layout) | Part of the lane model, so everyone sees every park. Nothing on it collides or can be queried, so it never blocks the player or the camera. The lane model carries `Owner`, `Seats` and `Park` (upgrade levels) attributes. |
 | Seated Mascots and upgrade props | Client (`ParkController`) from the lane's `Seats` and `Park` attributes | Simple part-built rigs (`Modules/MascotRig`, shared with the catch reveal) and upgrade props that grow with their level (`Modules/ParkProps`), rebuilt only when they change, with a Cash/s tag shown up close. Parks over 140 studs from the camera aren't drawn; only your own Mascots bob, and not in low graphics. |
 | Biome strips (ground, side bands, simple props, start lines, lighting) | Client (`WorldController`) from `Config/Biomes` | Nothing to replicate. Each biome is cut into tiles (`Tuning.World.TILE_LENGTH`) and only tiles near the camera exist (`STREAM_AHEAD` / `STREAM_BEHIND`), pooled. Lighting and the Atmosphere blend to the biome under the camera. |
 | Landmarks | Client clones from `ReplicatedStorage.Landmarks` | Hand-made models, placed by config. |
@@ -228,7 +266,7 @@ number along one straight track, so the server never needs the biome geometry.
 | Services/PromotionService | `Promote`: checks the next tier's requirements (`Formulas.promotionStatus`), resets Cash (first), balls, bats, park, Power and biome progress to new-run values, keeps every Mascot, lock and the Index, and raises `stadiumTier`. |
 | Services/HighlightService | **Highlight event.** Biomes reached for the first time this run, record milestones, and (planned) catches that earn a reveal or rare-catch clip. Fires a server Signal and the `Highlight` remote. |
 | Services/ChallengeService | **Per-biome challenge.** Reads each biome's `challenge` slot. Does nothing while all are nil. |
-| Services/WorldService | Builds the batting lanes (pad, plate, hitting circle, spawn), the ballpark plots and, only if it's the default pitcher, the pitching machine. |
+| Services/WorldService | Builds the shared hitting zone and hit line, the batting lanes (spawn, hidden StrikePoint), the ballpark plots and, only if it's the default pitcher, the machine with its pad and plate. Gives the server-made bat its `TrailBase` / `TrailTip` attachments for the swoosh. |
 | Services/ReplicationService | Send each player their own snapshot and changes; (planned) everyone's seated Mascots for display. |
 | Services/LeaderstatsService | Stadium tier and Best distance in the player list. |
 | Pitchers/Fungo | Default `Pitcher`, mode "toss": no cooldown; `travelTime` is tap-to-contact (`Fungo.CONTACT_AT`). |
@@ -244,14 +282,14 @@ number along one straight track, so the server never needs the biome geometry.
 |---|---|
 | Controllers/StateController | Latest snapshot from the server; others read it. |
 | Controllers/InputController | No SWING button. A tap anywhere on the game view (not on buttons or menus), left click, Space (instead of jump) or gamepad R2 swings: `FungoController.Toss`, or with the machine, hits the pitch in play. While the ball-cam is away a tap skips the reveal. |
-| Controllers/FungoController | `Toss()`: one tap = toss and swing. Sends `Swing(tossId)` at the tap, faces the batter down the field and roots them (walking stops until the ball leaves the bat), plays the tier's swing (`SwingAnimator`) in this order: the toss (the glove hand flips the ball up on `Release`, 0.12s), the batter sets into the hitting stance while it's in the air, loads as it comes down, plants and swings; `Contact` fires the crack, sparks, dust, shockwave and camera punch and starts the hit-stop, and the ball launches `Fungo.CONTACT_AT` (0.9s) after the tap from the animation's contact point. The tap shows at once (the toss starts on it); the length is a fixed part of every cycle, the same at every tier, and the server times its cycle from it. One toss per cycle; a tap that comes before the server's minimum gap is held, not dropped. Without animations (R6, or no ids in a live server) it plays the simple `BatSwing`. Visual and audio only. Auto-Swing will call `Toss`. |
-| Modules/SwingAnimator | The batter's animations on the local character (they replicate, so everyone sees them): `FungoStance` (Idle loop: bat on the shoulder, breathing, weight shift), `FungoCarry` (upper-body loop while walking) and one swing per Power tier (Action4: toss, load, swing, contact, follow-through; the tier changes the leg lift, hip turn and finish; the top tier points the bat at the sky and flips it). The stance plays only while standing on the ground (the default walk and jump are Core priority, below Idle). Two tracks per tier are used in turn, so a new toss blends out of the last follow-through. The finish pose is held until the camera is back (+1.2s); a new toss cancels it at once, and walking cuts it short. Animations are preloaded when the character spawns; a swing that isn't loaded yet falls back to the simple swing. Ids from `Fungo.ANIMATIONS`; in Studio, unpublished ones come from `ReplicatedStorage.Animations` through KeyframeSequenceProvider. |
-| Modules/SwingData | Generated: each swing's KeyframeSequence name, marker times and contact point (root space). |
+| Controllers/FungoController | `Toss()`: one tap = toss and swing. Sends `Swing(tossId)` at the tap. No rooting: the batter keeps walking; `AutoRotate` turns off and the batter eases to face +Z (0.08s), back on at contact + 0.1s. Plays the tier's swing (`SwingAnimator`) in this order: the off hand tosses the ball high on `Release` while the bat rises, the batter sets while it's in the air, loads as it drops, plants and swings; `SwooshOn` / `SwooshOff` turn on a white trail between the bat's `TrailBase` and `TrailTip` (width and lifetime grow with the tier, halved lifetime on low graphics, a whoosh sound; local only, others see the swing but not the trail); `Contact` fires the crack, sparks, dust, shockwave and camera punch and starts the hit-stop, and the ball launches `Fungo.CONTACT_AT` (0.45s) after the tap from the animation's contact point. The strike point follows the batter, so the dropping ball meets the moving bat; a tap outside the hitting zone launches from the zone's nearest point. The tap shows at once (the toss starts on it); the length is a fixed part of every cycle, the same at every tier, and the server times its cycle from it. One toss per cycle; a tap that comes before the server's minimum gap is held, not dropped. Without animations (R6, or no ids in a live server) it plays the simple `BatSwing`. Visual and audio only. Auto-Swing will call `Toss`. |
+| Modules/SwingAnimator | The batter's animations on the local character (they replicate, so everyone sees them): `FungoStance` (Idle loop: bat on the shoulder, breathing, weight shift), `FungoCarry` (upper-body loop while walking) and one swing per Power tier (Action4: toss, load, swing, contact, follow-through; the tier changes the leg lift, hip turn and finish; the top tier points the bat at the sky and flips it). The stance plays only while standing on the ground (the default walk and jump are Core priority, below Idle). Each swing is a pair, full-body and upper-body (`FungoSwingUpper…`), with two pairs per tier used in turn, so a new toss blends out of the last follow-through. Standing plays the full-body track; walking plays the upper-body one over the walk, and starting or stopping mid-swing switches tracks at the same time position (0.15s fade). Markers come from the full track. The finish pose is held until the camera is back (+1.2s); a new toss cancels it at once. A missing upper track plays the full one alone. A published track whose length doesn't match `SwingData` is out of date: Studio plays the repo version, live plays the simple swing. Animations are preloaded when the character spawns; a swing that isn't loaded yet falls back to the simple swing. Ids from `Fungo.ANIMATIONS` (`swings`, `upperSwings`); in Studio, unpublished ones come from `ReplicatedStorage.Animations` through KeyframeSequenceProvider. |
+| Modules/SwingData | Generated: each swing's KeyframeSequence name, upper-body name, length, marker times (release, contact, finish, swoosh on/off) and contact point (root space). |
 | Controllers/PitcherController | "throw" pitchers only: plays each `Pitch` using that pitcher's visual and keeps the pitch in play. |
 | Modules/BatSwing | The simple bat swing (ready → contact → optional hit-stop hold → follow-through → ready): the machine path and Fungo's fallback without animations. |
-| Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
+| Controllers/BallController | Contact and the flight segments from `HitResult`, with slow motion before the landing. The ball flies from the bat onto a line straight down +Z from the batter's X (`HitZone.lineOrigin`) and lands `segment.to` studs past the hit line. Fires `Launched` and `Touchdown`; `WatchDistance` for crossings. |
 | Controllers/WorldController | Streams biome tiles and landmarks around the camera; blends lighting per biome. Shows the player's world and rebuilds when `stadiumTier` changes. |
-| Controllers/CameraController | Ball-cam on every hit: snap behind the ball, follow, hold on the landing for the catch reveal (time from the server's catch), swoop (or fade-cut when far) back to the batter. Fires `RevealStarted` / `RevealEnded`; takes the reveal's shot from `SetRevealCamera`. `SkipReveal` on tap; sends `Ready`. |
+| Controllers/CameraController | Ball-cam on every hit: hold on the batter for `Fungo.CAMERA_BEAT` (0.25s, so the follow-through and swoosh are seen), glide behind the ball over `CAMERA_GLIDE` (0.3s, half that for far hits), follow, hold on the landing for the catch reveal (time from the server's catch), swoop (or fade-cut when far) back to the batter where they stand now. Fires `RevealStarted` / `RevealEnded`; takes the reveal's shot from `SetRevealCamera`. `SkipReveal` on tap; sends `Ready`. |
 | Controllers/CatchRevealController | The catch reveal: a part-built placeholder Mascot (species color, rarity ring, variant mark, size scale) runs in, hops to catch the ball and turns to the camera while its name types in; the camera watches from its side. Full (3s, with NEW!, rarity, variant, size) for new Rare+ species, 1s otherwise. Visual only. Studio-only `RevealPreview` hook for screenshots. |
 | Controllers/HighlightController | Biome banner at the line crossing; distance popup; catch toast (after the reveal ends, or at once if there was none) and sold toasts; client `Landed` signal. |
 | Controllers/HudController | Power, Cash (and Cash/s), distance bar with biome markers, a "+Power" popup at bat-on-ball. No SWING button: a tap on the game view swings (InputController). |
@@ -280,7 +318,8 @@ number along one straight track, so the server never needs the biome geometry.
 | Format | Number display (1.2K, 3.4M). |
 | Signal | Small server/client event utility used by the hooks. |
 | BatPose | Bat grip poses shared by server and client. |
-| Config/Tuning | **Every tunable number** (Fungo cycle and Power tiers, pitch timing, Power, distance, biome starts, lanes, streaming, ball-cam, highlights, swing, catch: Luck, variants, sizes, Cash/s, sell value; planned: reveal, offline). |
+| HitZone | The shared hitting zone: `halfWidth()`, `contains(pos)`, `clamp(pos)`, `lineOrigin(x)` (where a ball's flight line starts on the hit line). |
+| Config/Tuning | **Every tunable number** (Fungo cycle and Power tiers, pitch timing, Power, distance, biome starts, lanes and hitting zone, streaming, ball-cam, highlights, swing, catch: Luck, variants, sizes, Cash/s, sell value; planned: reveal, offline). |
 | Config/Biomes | Biome visuals, keyed by world (`Biomes[1]` = World 1; `Biomes[2]` = World 1 recoloured to dusk, a placeholder). |
 | Config/Mascots | Rarities, and species keyed by world then biome id: 6 per biome at launch (one per rarity), 8 Index slots. World 2's are generated placeholders (`w2_…`). |
 | Config/Balls | 6 ball tiers in unlock order: price and base rarity weights. |
@@ -292,11 +331,11 @@ number along one straight track, so the server never needs the biome geometry.
 
 ```
 tap ──▶ FungoController.Toss: toss + swing on screen at once; Swing(tossId) ──▶ SwingService
-      │  (the client launches the ball at bat-on-ball, Fungo.CONTACT_AT after the tap, from
-      │   where the batter stands; this confirms the numbers)
+      │  (the client launches the ball at bat-on-ball, Fungo.CONTACT_AT (0.45s) after the tap,
+      │   from where the batter stands, straight down +Z; this confirms the numbers)
       │  PitchService: a second toss in the same cycle / old id → ignored (one hit per cycle)
       │  power += 1 × StatService.multiplier
-      │  segment 1 = { from 0, to Formulas.distance(power), source "hit" }
+      │  segment 1 = { from 0, to Formulas.distance(power), source "hit" } (studs past the hit line)
       ▼
 LandingService: push handlers (none yet) → may append segments
       │  catch phase (MascotService): biome + Luck from final distance, odds from best ball
@@ -320,8 +359,9 @@ tap hits the pitch in play instead; everything after `SwingService` is the same.
   one (toss + air time + slow motion + reveal + return), the same numbers the client camera
   uses, both timed from the tap. The catch reveal is 1s (`Reveal.SHORT`), or 3s
   (`Reveal.FULL`) for a new Rare+ species. Taps while the camera is away only skip the reveal.
-  Biome 2 measured at 48.7s (hit 15) with a tap the moment each cycle opens and no skipping
-  (with the 0.9s toss-and-swing).
+  Biome 2 (hit 15) takes about 46s with a tap the moment each cycle opens and full 1s reveals,
+  and about 37s with every reveal skipped (with the 0.45s toss-and-swing; it was 48.7s measured
+  at 0.9s).
   The ball stays on the ground through the whole reveal (`Flight.LINGER_TIME`).
 - **The cycle is the same at every tier.** The ball always launches `Fungo.CONTACT_AT` after
   the tap; a bigger hit-stop is taken out of the toss, and a higher toss just moves faster.
@@ -341,8 +381,10 @@ tap hits the pitch in play instead; everything after `SwingService` is the same.
   mark to stand on. The client starts the toss the instant you tap and launches the ball at
   contact: to the server's distance if its `HitResult` is already here (it was sent at the
   tap), else to a predicted one (`Formulas.distance(power + last gain)`), re-planned mid-air
-  when the result comes. The ball starts at the batter and lands on the lane's centre line,
-  where the server's landing is. The player never waits for the server.
+  when the result comes. The ball starts at the bat and flies straight down +Z from the
+  batter's X (clamped to the zone), landing `segment.to` studs past the hit line, so biome
+  crossings match the server. The server never reads where the player stands (its landing
+  position is the lane-centre approximation). The player never waits for the server.
 - **The catch never makes you wait.** The catch is rolled on the server, so the client can't
   predict it, but `HitResult` normally arrives while the ball is still in the air (at least
   ~1s). If it's still missing at landing, the reveal is skipped and a toast shows the catch
@@ -459,7 +501,7 @@ adds missing keys, so the wipe is explicit.
 | Rule ([CLAUDE.md](../CLAUDE.md)) | Where |
 |---|---|
 | Server-side stats | Only Services write the save. The client sends a toss id (or pitch id) and ids, never values. Catches are rolled with a server `Random`. |
-| Low-end mobile | Biomes built on the client, only near the camera; one ball part plus a cheap trail; part-built Mascot rigs, far parks hidden; Cash is paid and sent once a second, and the HUD counts up between payouts from the shared rate formula. |
+| Low-end mobile | 5-player servers (5 parks to draw); biomes built on the client, only near the camera; one ball part plus a cheap trail; the bat's swoosh trail is local only (others don't draw it) and shorter on low graphics; part-built Mascot rigs, far parks hidden; Cash is paid and sent once a second, and the HUD counts up between payouts from the shared rate formula. |
 | Power, distance and tier never for Robux; balls Cash-only | No product touches Power, distance, stadium tier or balls. Robux items are a Luck Boost (luck only) and Auto-Swing (the tap path). |
 | Odds before any luck purchase | The odds screen shows every Mascot's % with and without the boost, from the same `Formulas.catchOdds` the server rolls with. |
 | Safe at home | No trading or stealing. Sales only through the player's tap, Auto-Sell or the On Deck rule, at full value, never locked Mascots; `MascotInventory` checks this on every change. Promotion keeps every Mascot. |

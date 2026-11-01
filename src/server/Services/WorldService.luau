@@ -1,13 +1,16 @@
 --!strict
--- WorldService: builds the batting lanes at startup and gives each player their own lane.
--- A lane is a dirt pad, a home plate inside a chalk hitting circle (the player hits from anywhere
--- in it; Fungo needs no pitcher in the scene), a batter spawn, and the player's ballpark plot
--- behind the plate (Config/Park): 10 seat pads, an owner sign, upgrade spots. The pitching
--- machine is only built when it's the default pitcher (Tuning.Pitch.DEFAULT_PITCHER).
--- The plate's StrikePoint marks the lane's centre line: every ball lands on it.
+-- WorldService: builds the ballparks and the shared hitting zone at startup and gives each player
+-- their own lane.
+--   * workspace.HittingZone: one dirt strip across every lane (Tuning.World.HIT_ZONE, shared/HitZone)
+--     with a chalk hit line at its front. Players walk anywhere and tap; the client starts the
+--     ball inside the zone and flies it straight down +Z from the batter's X.
+--   * Per lane: a batter spawn in the zone in front of the player's ballpark plot (Config/Park:
+--     10 seat pads, an owner sign, upgrade spots) and a hidden StrikePoint at the lane's centre
+--     on the hit line. The pad, plate and pitching machine are only built when the machine is the
+--     default pitcher (Tuning.Pitch.DEFAULT_PITCHER); its pitches fly to the StrikePoint.
 -- The lane model carries the owner (attribute "Owner") and what's seated ("Seats").
--- Lanes sit side by side along X; every ball flies along +Z from its lane's plate.
--- Lane models are Persistent so streaming never hides a player's plate or machine.
+-- Lanes sit side by side along X. Lane models and the zone are Persistent so streaming never
+-- hides them.
 --   WorldService.GetLane(player)                  -> lane number or nil
 --   WorldService.GetLandingPosition(player, dist) -> world position `dist` studs down the lane
 
@@ -15,10 +18,14 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local BatPose = require(ReplicatedStorage.Shared.BatPose)
+local HitZone = require(ReplicatedStorage.Shared.HitZone)
 local Park = require(ReplicatedStorage.Shared.Config.Park)
 local Tuning = require(ReplicatedStorage.Shared.Config.Tuning)
 
 local FOLDER_NAME = "BattingAreas"
+local ZONE_NAME = "HittingZone"
+local DIRT = Color3.fromRGB(176, 132, 88)
+local CHALK = Color3.fromRGB(245, 240, 230)
 local BAT_NAME = "Bat"
 
 local WorldService = {}
@@ -172,25 +179,32 @@ local function buildPitchingMachine(model: Model, origin: Vector3)
 	machine.Parent = model
 end
 
--- The hitting circle: a flat chalk ring on the pad with a lighter disc inside. Doesn't collide.
-local function buildHitCircle(model: Model, origin: Vector3)
-	local r = Tuning.World.HIT_CIRCLE_RADIUS
-	local upright = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder's flat faces point along X
-	local function disc(name: string, radius: number, y: number, color: Color3)
-		part({
-			Name = name,
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.05, radius * 2, radius * 2),
-			CFrame = CFrame.new(origin + Vector3.new(0, y, 0)) * upright,
-			Color = color,
-			CanCollide = false,
-			CanQuery = false,
-			CanTouch = false,
-			Parent = model,
-		})
-	end
-	disc("HitCircle", r, 0.03, Color3.fromRGB(245, 240, 230))
-	disc("HitCircleInner", r - 0.35, 0.05, Color3.fromRGB(196, 152, 106))
+-- The shared hitting zone: a dirt strip you can stand on, plus the chalk hit line at its front.
+local function buildHittingZone(): Model
+	local zone = Tuning.World.HIT_ZONE
+	local width = 2 * (HitZone.halfWidth() + 2)
+	local depth = zone.front - zone.back
+	local model = Instance.new("Model")
+	model.Name = ZONE_NAME
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	part({
+		Name = "Dirt",
+		Size = Vector3.new(width, 1, depth),
+		Position = Vector3.new(0, -0.5, zone.back + depth / 2), -- top at Y = 0
+		Color = DIRT,
+		Parent = model,
+	})
+	part({
+		Name = "HitLine",
+		Size = Vector3.new(width, 0.05, 0.5),
+		Position = Vector3.new(0, 0.03, zone.front - 0.25),
+		Color = CHALK,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		Parent = model,
+	})
+	return model
 end
 
 local function buildLane(lane: number): Model
@@ -204,30 +218,42 @@ local function buildLane(lane: number): Model
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	model:SetAttribute("Lane", lane)
 
-	-- Dirt around the hitting circle (and out to the machine when it's used).
-	local padFront = if useMachine then w.PITCH_DISTANCE + 7 else w.HIT_CIRCLE_RADIUS + 2
-	local padBack = w.HIT_CIRCLE_RADIUS + 2
-	part({
-		Name = "Pad",
-		Size = Vector3.new(2 * (w.HIT_CIRCLE_RADIUS + 2), 1, padFront + padBack),
-		Position = origin + Vector3.new(0, -0.5, (padFront - padBack) / 2),
-		Color = Color3.fromRGB(176, 132, 88),
-		Parent = model,
-	})
-	buildHitCircle(model, origin)
-
-	local plate = part({
-		Name = "Plate",
-		Size = Vector3.new(2.5, 0.2, 2.5),
-		Position = origin + Vector3.new(0, 0.1, 0),
-		Color = Color3.fromRGB(245, 245, 245),
+	-- The lane's centre on the hit line: the machine's pitches fly here. Hidden, so it's on an
+	-- invisible anchor that never collides or blocks the camera.
+	local anchor = part({
+		Name = "StrikeAnchor",
+		Size = Vector3.new(0.2, 0.2, 0.2),
+		Position = origin,
+		Transparency = 1,
 		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
 		Parent = model,
 	})
 	local strike = Instance.new("Attachment")
 	strike.Name = "StrikePoint"
-	strike.Parent = plate
+	strike.Parent = anchor
 	strike.WorldPosition = origin + Vector3.new(0, w.STRIKE_HEIGHT, 0)
+
+	if useMachine then
+		-- Dirt from the hit line out to the machine, and a plate under the strike point.
+		local padFront = w.PITCH_DISTANCE + 7
+		part({
+			Name = "Pad",
+			Size = Vector3.new(18, 1, padFront),
+			Position = origin + Vector3.new(0, -0.5, padFront / 2),
+			Color = DIRT,
+			Parent = model,
+		})
+		part({
+			Name = "Plate",
+			Size = Vector3.new(2.5, 0.2, 2.5),
+			Position = origin + Vector3.new(0, 0.1, 0),
+			Color = Color3.fromRGB(245, 245, 245),
+			CanCollide = false,
+			Parent = model,
+		})
+	end
 
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "BatterSpawn"
@@ -235,7 +261,8 @@ local function buildLane(lane: number): Model
 	spawn.CastShadow = false
 	spawn.Material = Enum.Material.SmoothPlastic
 	spawn.Size = Vector3.new(4, 0.2, 4)
-	spawn.CFrame = facing * CFrame.new(-2.5, 0.1, 3) -- beside and just behind the plate
+	-- In the zone, in front of the player's own plot (local -Z is down the field).
+	spawn.CFrame = facing * CFrame.new(0, 0.1, -(w.HIT_ZONE.back + 5))
 	spawn.Color = Color3.fromRGB(120, 90, 60)
 	spawn.Duration = 0 -- no spawn forcefield
 	spawn.Neutral = true
@@ -244,7 +271,6 @@ local function buildLane(lane: number): Model
 	if useMachine then
 		buildPitchingMachine(model, origin)
 	end
-
 	buildPlot(model, origin)
 	return model
 end
@@ -268,6 +294,8 @@ local function assignLane(player: Player)
 			return
 		end
 	end
+	-- They still swing normally (the ball flies from their own X); the client shows a toast.
+	player:SetAttribute("Lane", nil)
 	warn(`[WorldService] No free lane for {player.Name}; raise Tuning.World.LANE_COUNT or lower max players`)
 end
 
@@ -324,6 +352,18 @@ local function giveBat(character: Model)
 	grip.Part1 = handle
 	grip.C0 = BatPose.grip(BatPose.READY, hand.Name == "Right Arm")
 	grip.Parent = handle
+
+	-- The client's swing trail runs between these (along the bat, +X is toward the tip).
+	local tipX = (BatPose.HANDLE_LENGTH + BatPose.BARREL_LENGTH) / 2 - 0.1 + BatPose.BARREL_LENGTH / 2
+	local trailBase = Instance.new("Attachment")
+	trailBase.Name = "TrailBase"
+	trailBase.Position = Vector3.new((tipX - BatPose.HANDLE_LENGTH / 2) / 2, 0, 0) -- mid-bat
+	trailBase.Parent = handle
+	local trailTip = Instance.new("Attachment")
+	trailTip.Name = "TrailTip"
+	trailTip.Position = Vector3.new(tipX, 0, 0)
+	trailTip.Parent = handle
+
 	handle.Parent = character
 	barrel.Parent = character
 end
@@ -373,6 +413,8 @@ function WorldService.SetParkLevels(player: Player, encoded: string)
 	end
 end
 
+-- The lane-centre approximation of where a hit lands. The client flies the ball from the
+-- batter's own X; the server never uses (or checks) the client's position.
 function WorldService.GetLandingPosition(player: Player, distance: number): Vector3
 	local lane = playerLane[player] or 1
 	return plateOrigin(lane) + Vector3.new(0, 0, distance)
@@ -387,6 +429,7 @@ function WorldService.Init()
 		laneModels[lane] = model
 	end
 	folder.Parent = workspace
+	buildHittingZone().Parent = workspace
 end
 
 function WorldService.Start()

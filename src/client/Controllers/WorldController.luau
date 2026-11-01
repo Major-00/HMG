@@ -25,7 +25,7 @@ local Tuning = require(Config:WaitForChild("Tuning"))
 
 local StateController = require(script.Parent.StateController)
 
-local GROUND_TOP = -0.05 -- just under the batting pads (top at 0) so they don't flicker
+local GROUND_TOP = -0.05 -- just under the hitting zone (top at 0) so they don't flicker
 local GROUND_THICKNESS = 1
 local LINE_DEPTH = 2
 local POST_SIZE = Vector3.new(3, 22, 3)

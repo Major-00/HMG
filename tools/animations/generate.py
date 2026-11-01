@@ -16,9 +16,22 @@ For every pose the script solves the joints: legs reach planted feet (no foot sl
 arms reach the bat grip, the head looks at a target, the bat follows the hands. Visual only:
 nothing here changes a result (CLAUDE.md guardrail 4).
 
-Timing comes from src/shared/Config/Tuning.luau (Fungo.CONTACT_AT and each tier's hitStop), so
-the "Contact" marker always sits at CONTACT_AT - hitStop and the ball always launches at
-CONTACT_AT, the same at every tier.
+Timing comes from src/shared/Config/Tuning.luau (Fungo.CONTACT_AT, each tier's hitStop and
+tossHeight). Each swing is timed back from contact, c = CONTACT_AT - hitStop:
+  0     stance
+  0.07  release   the glove hand tosses the ball while the bat rises ("Release")
+  0.15  set       both hands on the bat, eyes up at the ball
+  c-.17 load      crouch and coil as the ball drops
+  c-.10 plant     front foot down ("SwooshOn": the bat's white arc starts)
+  c-.05 launch    hips open, hands into the slot
+  c     contact   bat on ball ("Contact"); held for the hit-stop until CONTACT_AT
+  CONTACT_AT+.10  wrap ("SwooshOff" 0.05 later)
+  CONTACT_AT+.22  finish ("Finish"; Launch flips the bat for 0.3s more first), then a tail
+So the ball always launches at CONTACT_AT, the same at every tier.
+
+Every swing is also written as FungoSwingUpper<Tier>: the same motion for the upper body only
+(UpperTorso and up), played while walking. Its UpperTorso pose is re-expressed against a
+forward-facing LowerTorso, so the torso, arms and bat sit where the full swing puts them.
 """
 
 import json
@@ -424,11 +437,16 @@ def cf_xml(cf):
     return "".join(f"<{n}>{v:.5f}</{n}>" for n, v in zip(names, vals))
 
 
-def pose_xml(name, transforms, animated, ease):
+def has_animated(name, animated):
+    return name in animated or any(has_animated(c, animated) for c in HIERARCHY.get(name, []))
+
+
+def pose_xml(name, transforms, animated, ease, prune=False):
     cf = transforms.get(name, CF())
     weight = 1 if name in animated else 0
     style, direction = ease
-    children = "".join(pose_xml(c, transforms, animated, ease) for c in HIERARCHY.get(name, []))
+    kids = [c for c in HIERARCHY.get(name, []) if not prune or has_animated(c, animated)]
+    children = "".join(pose_xml(c, transforms, animated, ease, prune) for c in kids)
     return (
         f'<Item class="Pose" referent="{ref()}"><Properties>'
         f'<string name="Name">{name}</string>'
@@ -440,8 +458,23 @@ def pose_xml(name, transforms, animated, ease):
     )
 
 
-def write_kfs(name, keyframes, loop, priority, animated):
-    """keyframes: list of (time, transforms, markers, ease)."""
+written = []  # every animation written this run (anything else in OUT_DIR is removed)
+
+
+def write_if_changed(path, text):
+    """Overwrite in place, and only when the content changed (Rojo dislikes delete + recreate)."""
+    if os.path.exists(path):
+        with open(path) as f:
+            if f.read() == text:
+                return
+    with open(path, "w") as f:
+        f.write(text)
+
+
+def write_kfs(name, keyframes, loop, priority, animated, prune=False):
+    """keyframes: list of (time, transforms, markers, ease). prune leaves out poses with nothing
+    animated below them (the legs of an upper-body animation)."""
+    written.append(name)
     items = []
     for time, transforms, markers, ease in keyframes:
         marker_xml = "".join(
@@ -452,7 +485,7 @@ def write_kfs(name, keyframes, loop, priority, animated):
         items.append(
             f'<Item class="Keyframe" referent="{ref()}"><Properties>'
             f'<string name="Name">Keyframe</string><float name="Time">{time:.4f}</float></Properties>'
-            f'{pose_xml("HumanoidRootPart", transforms, animated, ease)}{marker_xml}</Item>'
+            f'{pose_xml("HumanoidRootPart", transforms, animated, ease, prune)}{marker_xml}</Item>'
         )
     xml = (
         '<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" '
@@ -465,8 +498,7 @@ def write_kfs(name, keyframes, loop, priority, animated):
         f'<float name="AuthoredHipHeight">2</float>'
         f"</Properties>{''.join(items)}</Item></roblox>\n"
     )
-    with open(os.path.join(OUT_DIR, f"{name}.rbxmx"), "w") as f:
-        f.write(xml)
+    write_if_changed(os.path.join(OUT_DIR, f"{name}.rbxmx"), xml)
 
 
 ALL_PARTS = set(JOINTS) | {"Bat"}
@@ -478,6 +510,8 @@ fungo = tuning[tuning.index("Fungo = {"):]
 CONTACT_AT = float(re.search(r"CONTACT_AT = ([0-9.]+)", fungo).group(1))
 HIT_STOPS = [float(x) for x in re.findall(r"hitStop = ([0-9.]+)", fungo)]
 assert len(HIT_STOPS) == 5, "expected 5 swing tiers in Tuning.Fungo.TIERS"
+TOSS_HEIGHTS = [float(x) for x in re.findall(r"tossHeight = ([0-9.]+)", fungo)]
+assert len(TOSS_HEIGHTS) == 5, "expected a tossHeight on each of the 5 Tuning.Fungo.TIERS"
 
 # --- the poses (B space; see the module docstring) ------------------------------------------
 
@@ -504,15 +538,16 @@ def stance(breath=0.0, sway=0.0, waggle=0.0):
 
 # The swing's core, shaped per tier:
 #   lift: front knee lift at the load (studs); coil: hips turned back at the load (degrees);
-#   fire: hips open at contact; apex: the toss height the head follows (Tuning tossHeight);
-#   finish: the follow-through pose for the tier.
+#   fire: hips open at contact; apex: the toss height the head follows (Tuning tossHeight).
 TIERS = [
-    {"name": "Pop", "lift": 0.15, "coil": 14, "fire": 38, "apex": 3},
-    {"name": "Solid", "lift": 0.28, "coil": 20, "fire": 45, "apex": 3.6},
-    {"name": "Crush", "lift": 0.4, "coil": 26, "fire": 52, "apex": 4.2},
-    {"name": "Blast", "lift": 0.55, "coil": 31, "fire": 58, "apex": 4.8},
-    {"name": "Launch", "lift": 0.7, "coil": 36, "fire": 64, "apex": 5.5},
+    {"name": "Pop", "lift": 0.15, "coil": 14, "fire": 38},
+    {"name": "Solid", "lift": 0.28, "coil": 20, "fire": 45},
+    {"name": "Crush", "lift": 0.4, "coil": 26, "fire": 52},
+    {"name": "Blast", "lift": 0.55, "coil": 31, "fire": 58},
+    {"name": "Launch", "lift": 0.7, "coil": 36, "fire": 64},
 ]
+for _tier, _apex in zip(TIERS, TOSS_HEIGHTS):
+    _tier["apex"] = _apex
 CONTACT_GRIP = (-0.25, -0.45, -1.2)
 CONTACT_BAT = (0.12, 0.06, -1)
 
@@ -664,6 +699,49 @@ def finish_pose(tier, i):
 def solve(spec, label):
     transforms, contact = solve_pose(spec, label)
     return transforms, contact
+
+
+# --- forward kinematics and the upper-body version ----------------------------------------------
+
+FK_ORDER = []
+
+
+def _fk_order(name):
+    for c in HIERARCHY.get(name, []):
+        FK_ORDER.append(c)
+        _fk_order(c)
+
+
+_fk_order("HumanoidRootPart")
+
+
+def fk_contact(transforms):
+    """The bat's sweet spot (root space) for a set of joint transforms."""
+    world = {"HumanoidRootPart": CF()}
+    for part in FK_ORDER:
+        if part == "Bat":
+            continue
+        parent, c0, c1 = JOINTS[part]
+        world[part] = world[parent] * pos(c0) * transforms.get(part, CF()) * pos(c1).inv()
+    return (world["RightHand"] * BAT_C0 * transforms.get("Bat", CF())).point((SWEET_SPOT, 0, 0)), world
+
+
+# While walking the walk animation drives the hips: assume a LowerTorso facing forward, like the
+# carry's hips = (90, 0, 0) in B (no root shift).
+WALK_ROOT = CF(mm(B_TO_ROOT, euler(90, 0, 0)))
+WALK_LT = pos(JOINTS["LowerTorso"][1]) * WALK_ROOT * pos(JOINTS["LowerTorso"][2]).inv()
+
+
+def upper_transforms(transforms):
+    """The same pose for UpperTorso and up, with the UpperTorso (rotation and position) put back
+    where the full pose has it relative to the root, on top of the walking LowerTorso."""
+    _, world = fk_contact(transforms)
+    ut = world["UpperTorso"]
+    waist = (WALK_LT * pos(JOINTS["UpperTorso"][1])).inv() * ut * pos(JOINTS["UpperTorso"][2])
+    out = {k: v for k, v in transforms.items() if k in UPPER_BODY}
+    out["LowerTorso"] = WALK_ROOT
+    out["UpperTorso"] = waist
+    return out
 
 
 # --- baking: solve the pose at a steady rate, so hands stay on the bat and feet stay planted ---
@@ -843,11 +921,13 @@ WAIST_LAG = 0.035
 LOOK_LAG = 0.07
 
 
-def bake(keys, label, rate=BAKE_RATE, loop=False):
+def bake(keys, label, rate=BAKE_RATE, loop=False, extra_markers=(), upper=False):
     """keys: [(time, spec, markers, style)], style "auto" | "stop" | "hold" (keep this pose to
-    the next key). Splines every pose field through the keys and solves a pose `rate` times a
-    second (plus every key). Returns frames for write_kfs and the solved contact point of the
-    key with the "Contact" marker."""
+    the next key). extra_markers: [(time, name)] for markers between keys (a frame is added
+    there so they land exactly). Splines every pose field through the keys and solves a pose
+    `rate` times a second (plus every key and marker). Returns frames for write_kfs, the solved
+    contact point of the key with the "Contact" marker, and (upper=True) the upper-body frames."""
+    keys = [(round(k[0], 4),) + tuple(k[1:]) for k in keys]
     times = [k[0] for k in keys]
     specs = [resolve_spec(k[1]) for k in keys]
     styles = [k[3] for k in keys]
@@ -890,16 +970,40 @@ def bake(keys, label, rate=BAKE_RATE, loop=False):
     while t < times[-1] - 1e-6:
         sample_times.add(round(t, 4))
         t += 1 / rate
-    frames, contact = [], None
+    marker_at = {k[0]: list(k[2]) for k in keys}
+    for mt, name in extra_markers:
+        mt = round(mt, 4)
+        assert times[0] < mt < times[-1], f"{label}: marker {name} outside the track"
+        sample_times.add(mt)
+        marker_at.setdefault(mt, []).append(name)
+    frames, uppers, contact = [], [], None
     linear = ("Linear", "In")
-    marker_at = {k[0]: k[2] for k in keys}
     for t in sorted(sample_times):
         markers = marker_at.get(t, [])
         transforms, point = solve(pose_at(t), f"{label} @{t:.3f}")
+        fk_point, _ = fk_contact(transforms)
+        assert length(sub(fk_point, point)) < 1e-6, f"{label} @{t:.3f}: forward kinematics disagree"
         if "Contact" in markers:
             contact = point
         frames.append((t, transforms, markers, linear))
-    return frames, contact
+        if upper:
+            ut = upper_transforms(transforms)
+            if "Contact" in markers:
+                up_point, _ = fk_contact(ut)
+                miss = length(sub(up_point, point))
+                assert miss < 0.01, f"{label}: the upper-body swing's contact is {miss:.3f} off"
+            uppers.append((t, ut, markers, linear))
+    return frames, contact, (uppers if upper else None)
+
+
+def check_timeline(keys, label, hold_pair):
+    """Key times strictly increase, at least 0.05s apart (but the hit-stop pair), and the set
+    comes at least 0.08s after the release."""
+    times = [round(k[0], 4) for k in keys]
+    for a, b in zip(times, times[1:]):
+        assert b > a, f"{label}: key times out of order ({a} then {b})"
+        if (a, b) != hold_pair:
+            assert b - a >= 0.05 - 1e-9, f"{label}: keys {a} and {b} are under 0.05s apart"
 
 
 def main():
@@ -908,7 +1012,7 @@ def main():
 
     # Stance: idle loop, whole body, Idle priority. The default walk and jump are Core priority
     # (below Idle), so SwingAnimator stops the stance while moving or in the air.
-    frames, _ = bake([(0, stance(), [], "auto"),
+    frames, _, _ = bake([(0, stance(), [], "auto"),
                       (0.8, stance(breath=0.6, sway=0.03, waggle=1), [], "auto"),
                       (1.6, stance(breath=1, sway=0.05, waggle=-0.4), [], "auto"),
                       (2.4, stance(breath=0.4, sway=-0.03, waggle=0.8), [], "auto"),
@@ -928,21 +1032,25 @@ def main():
             "look": r2b((0, 1.2, -10)),
         }
 
-    frames, _ = bake([(0, carry(0), [], "auto"), (0.9, carry(0.05), [], "auto"), (1.8, carry(0), [], "auto")],
-                     "Carry", rate=6, loop=True)
+    frames, _, _ = bake([(0, carry(0), [], "auto"), (0.9, carry(0.05), [], "auto"),
+                         (1.8, carry(0), [], "auto")], "Carry", rate=6, loop=True)
     write_kfs("FungoCarry", frames, True, "Action", UPPER_BODY)
 
     data_tiers = []
     for i, tier in enumerate(TIERS):
         h = HIT_STOPS[i]
         t_contact = round(CONTACT_AT - h, 4)
-        # Toss -> set into the stance while the ball rises -> load as it falls -> plant -> swing.
-        t_release = 0.12
-        t_set = round(CONTACT_AT * 0.5, 4)
-        t_load = round(CONTACT_AT - 0.38, 4)
-        t_plant = round(t_contact - 0.2, 4)
-        t_launch = round(t_contact - 0.1, 4)
-        assert t_release < t_set < t_load < t_plant < t_launch < t_contact, "CONTACT_AT too short for the toss"
+        # Toss while the bat rises -> set while the ball is up -> load as it drops -> plant ->
+        # launch -> contact (held for the hit-stop) -> wrap -> finish. See the module docstring.
+        t_release = 0.07
+        t_set = 0.15
+        t_load = round(t_contact - 0.17, 4)
+        t_plant = round(t_contact - 0.10, 4)
+        t_launch = round(t_contact - 0.05, 4)
+        t_wrap = round(CONTACT_AT + 0.10, 4)
+        t_finish = round(CONTACT_AT + 0.22, 4)
+        t_swoosh_off = round(t_wrap + 0.05, 4)
+        assert t_set - t_release >= 0.08 - 1e-9, "the set comes too soon after the release"
         label = tier["name"]
         fin_spec = finish_pose(tier, i)
         keys = [
@@ -950,14 +1058,12 @@ def main():
             (t_release, toss_pose(tier), ["Release"], "auto"),
             (t_set, set_pose(tier), [], "auto"),
             (t_load, load_pose(tier), [], "auto"),
-            (t_plant, plant_pose(tier), [], "auto"),
+            (t_plant, plant_pose(tier), ["SwooshOn"], "auto"),
             (t_launch, launch_pose(tier), [], "fast"),
             (t_contact, contact_pose(tier), ["Contact"], "hold" if h > 0 else "fast"),
         ]
         if h > 0:
             keys.append((CONTACT_AT, contact_pose(tier), [], "fast"))
-        t_wrap = CONTACT_AT + 0.12
-        t_finish = CONTACT_AT + 0.35
         keys.append((t_wrap, wrap_pose(tier), [], "fast"))
         if i == 4:
             # Point at the sky, then flip the bat: one turn in the hand, in thirds so it spins
@@ -966,41 +1072,61 @@ def main():
             for n, spin in enumerate((120, 240, 360), start=1):
                 keys.append((t_finish + 0.1 * n, dict(fin_spec, spin=spin), ["Finish"] if n == 3 else [],
                              "stop" if n == 3 else "auto"))
-            t_end = t_finish + 0.3
+            t_end = round(t_finish + 0.3, 4)
         else:
             keys.append((t_finish, fin_spec, ["Finish"], "stop"))
             t_end = t_finish
         # A tail after Finish, so the held pose is never the track's last instant.
-        keys.append((t_end + 0.25, dict(fin_spec, spin=360 if i == 4 else 0), [], "stop"))
-        frames, contact = bake(keys, label)
+        t_length = round(t_end + 0.25, 4)
+        keys.append((t_length, dict(fin_spec, spin=360 if i == 4 else 0), [], "stop"))
+        check_timeline(keys, label, (t_contact, round(CONTACT_AT, 4)) if h > 0 else None)
+        assert t_wrap < t_swoosh_off < t_finish, f"{label}: SwooshOff outside the wrap"
+        frames, contact, uppers = bake(keys, label, extra_markers=[(t_swoosh_off, "SwooshOff")], upper=True)
+        assert abs(frames[-1][0] - t_length) < 1e-9, f"{label}: the track doesn't end at its tail"
+        for f_ in (frames, uppers):
+            names = [m for _, _, ms, _ in f_ for m in ms]
+            assert sorted(names) == sorted(["Release", "SwooshOn", "Contact", "SwooshOff", "Finish"]), names
         write_kfs(f"FungoSwing{label}", frames, False, "Action4", ALL_PARTS)
-        data_tiers.append({"name": f"FungoSwing{label}", "release": t_release, "contact": t_contact,
-                           "finish": t_end, "point": contact})
+        write_kfs(f"FungoSwingUpper{label}", uppers, False, "Action4", UPPER_BODY, prune=True)
+        data_tiers.append({"name": f"FungoSwing{label}", "upperName": f"FungoSwingUpper{label}",
+                           "release": t_release, "contact": t_contact, "finish": t_end, "length": t_length,
+                           "swooshOn": t_plant, "swooshOff": t_swoosh_off, "point": contact})
 
     write_data(data_tiers)
     # Files are overwritten in place (deleting them first upsets Rojo's live sync); only
     # animations that no longer exist are removed.
-    written = {f"{n}.rbxmx" for n in ["FungoStance", "FungoCarry"] + [t["name"] for t in data_tiers]}
-    for f in before - written:
+    keep = {f"{n}.rbxmx" for n in written}
+    for f in sorted(before - keep):
+        print("removed", f)
         os.remove(os.path.join(OUT_DIR, f))
     for w in warnings:
         print("warning:", w)
-    print(f"wrote {len(TIERS) + 2} animations; CONTACT_AT {CONTACT_AT}, hit-stops {HIT_STOPS}")
+    print(f"wrote {len(written)} animations; CONTACT_AT {CONTACT_AT}, hit-stops {HIT_STOPS}, "
+          f"toss heights {TOSS_HEIGHTS}")
+
+
+def num(x):
+    """A time as written in SwingData (no trailing zeros)."""
+    return repr(round(x, 4))
 
 
 def write_data(tiers):
     lines = [
         "--!strict",
         "-- SwingData: GENERATED by tools/animations/generate.py; don't edit by hand.",
-        "-- For each Fungo swing tier (Tuning.Fungo.TIERS order): its KeyframeSequence name, marker",
-        "-- times (seconds from the tap) and where the bat meets the ball, in the root part's space",
-        "-- with the root facing the field. Visual only.",
+        "-- For each Fungo swing tier (Tuning.Fungo.TIERS order): its KeyframeSequence names (full",
+        "-- body, and upper body for walking), marker times (seconds from the tap) and where the bat",
+        "-- meets the ball, in the root part's space with the root facing the field. Visual only.",
         "",
         "export type Tier = {",
         "\tname: string,",
+        "\tupperName: string, -- the same swing, upper body only (played while walking)",
         "\trelease: number, -- the glove hand lets go of the ball",
         "\tcontact: number, -- bat on ball: the hit-stop starts (the ball launches at Fungo.CONTACT_AT)",
         "\tfinish: number, -- the follow-through's last pose",
+        "\tlength: number, -- the whole track",
+        "\tswooshOn: number, -- the bat's swing arc starts",
+        "\tswooshOff: number, -- ... and ends",
         "\tpoint: Vector3,",
         "}",
         "",
@@ -1011,13 +1137,21 @@ def write_data(tiers):
     ]
     for t in tiers:
         p = t["point"]
-        lines.append(
-            f'\t\t{{ name = "{t["name"]}", release = {t["release"]}, contact = {t["contact"]}, '
-            f'finish = {round(t["finish"], 4)}, point = Vector3.new({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}) }},'
-        )
+        lines += [
+            "\t\t{",
+            f'\t\t\tname = "{t["name"]}",',
+            f'\t\t\tupperName = "{t["upperName"]}",',
+            f"\t\t\trelease = {num(t['release'])},",
+            f"\t\t\tcontact = {num(t['contact'])},",
+            f"\t\t\tfinish = {num(t['finish'])},",
+            f"\t\t\tlength = {num(t['length'])},",
+            f"\t\t\tswooshOn = {num(t['swooshOn'])},",
+            f"\t\t\tswooshOff = {num(t['swooshOff'])},",
+            f"\t\t\tpoint = Vector3.new({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}),",
+            "\t\t},",
+        ]
     lines += ["\t} :: { Tier },", "}", ""]
-    with open(DATA_OUT, "w") as f:
-        f.write("\n".join(lines))
+    write_if_changed(DATA_OUT, "\n".join(lines))
 
 
 if __name__ == "__main__":

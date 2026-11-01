@@ -583,7 +583,29 @@ function HighlightController.Init()
 	end
 end
 
+-- A player with no lane (a full server) still swings normally; tell them once why their park
+-- is missing. Checked a few seconds after spawning, once the Lane attribute has replicated.
+local FULL_PARK_CHECK = 5
+local toldFull = false
+local function checkLane()
+	if not toldFull and Players.LocalPlayer:GetAttribute("Lane") == nil then
+		toldFull = true
+		HighlightController.ShowNotice(
+			"This ballpark is full",
+			"Your Mascots will seat when a park frees up",
+			Color3.fromRGB(255, 220, 90)
+		)
+	end
+end
+
 function HighlightController.Start()
+	local player = Players.LocalPlayer
+	player.CharacterAdded:Connect(function()
+		task.delay(FULL_PARK_CHECK, checkLane)
+	end)
+	if player.Character then
+		task.delay(FULL_PARK_CHECK, checkLane)
+	end
 	Remotes.Event("Highlight").OnClientEvent:Connect(onHighlight)
 	Remotes.Event("HitResult").OnClientEvent:Connect(onHitResult)
 	BallController.Launched:Connect(onLaunched)

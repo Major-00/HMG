@@ -44,16 +44,21 @@ local Tuning = {
 	},
 
 	-- Where each World 1 biome starts, in Config/Biomes order (Sandlot ... Canyon).
-	-- Biome 2 at 80 studs = 15 hits from a fresh save (20 + 4 * 15). With the ball-cam each hit
-	-- takes about 2.5-2.8s, so that's roughly 40-45s of play.
+	-- Biome 2 at 80 studs = 15 hits from a fresh save (20 + 4 * 15). With the ball-cam and a 1s
+	-- catch reveal each hit takes about 3.0-3.3s (2.3-2.6s with the reveal skipped), so that's
+	-- roughly 37-46s of play.
 	BiomeStarts = { 0, 80, 500, 1800, 5000, 12000 },
 
 	World = {
-		LANE_COUNT = 8, -- batting lanes per server (one per player; set the place's max players to match)
+		LANE_COUNT = 5, -- ballparks per server (one per player; set the place's max players to match)
 		LANE_SPACING = 30, -- studs between lanes, side to side
 		PITCH_DISTANCE = 20, -- studs from the plate to the pitching machine (when it's used)
 		STRIKE_HEIGHT = 3, -- studs above the ground where the ball is hit
-		HIT_CIRCLE_RADIUS = 7, -- the hitting circle around each plate: hit from anywhere in it
+		-- The shared hitting zone (shared/HitZone): one dirt strip across every lane, from `back`
+		-- (just in front of the ballparks) up to the hit line at `front`. Walk anywhere and tap:
+		-- a tap from outside it still hits, from the nearest point of the zone. Its width comes
+		-- from LANE_COUNT and LANE_SPACING. Distances are measured from the hit line (Z = front).
+		HIT_ZONE = { back = -18, front = 0 },
 
 		-- Biome ground, built on the client and streamed around the camera
 		TILE_LENGTH = 100, -- longest ground tile; each biome is cut into tiles from its own start
@@ -120,12 +125,18 @@ local Tuning = {
 		-- Seconds from the tap to the ball leaving the bat (after any hit-stop): the toss goes up,
 		-- the batter sets into the stance while it's in the air, loads and swings as it comes
 		-- down. The server times each cycle from this too (Pitchers/Fungo).
-		CONTACT_AT = 0.9,
+		CONTACT_AT = 0.45,
+		-- At contact the camera stays on the batter this long (the swoosh and the follow-through
+		-- are seen), then glides onto the ball over CAMERA_GLIDE seconds. Both run inside the
+		-- ball's flight, so they never change the pacing.
+		CAMERA_BEAT = 0.25,
+		CAMERA_GLIDE = 0.3,
 
 		-- The batter's animations (client/Modules/SwingAnimator). Paste each published id here as
 		-- "rbxassetid://<number>". Empty: in Studio the KeyframeSequence of the same name in
 		-- assets/Animations plays instead (tools/animations/generate.py makes them); in a live
-		-- server the simple swing plays. swings[i] is Power tier i (TIERS below).
+		-- server the simple swing plays. swings[i] is Power tier i (TIERS below); upperSwings[i]
+		-- is its upper-body version, played while walking (empty: the full-body swing plays).
 		ANIMATIONS = {
 			stance = "rbxassetid://114145299293411", -- FungoStance
 			carry = "rbxassetid://78138491705919", -- FungoCarry
@@ -136,8 +147,9 @@ local Tuning = {
 				"rbxassetid://71218713514451", -- FungoSwingBlast
 				"rbxassetid://126617258477960", -- FungoSwingLaunch
 			},
+			upperSwings = { "", "", "", "", "" }, -- FungoSwingUpperPop ... FungoSwingUpperLaunch
 		},
-		CYCLE = 1.2, -- seconds from the tap to the end of the swing; the same at every tier
+		CYCLE = 0.8, -- seconds from the tap to the end of the swing; the same at every tier
 		STRIKE_FORWARD = 2.5, -- studs in front of the batter where the ball is hit
 		STRIKE_SIDE = 0.8, -- ... and this far to the batter's right
 
@@ -152,11 +164,12 @@ local Tuning = {
 		--   sparks      impact particles; dust: ground dust ("lift-off"); 0 = none
 		--   shockwave   ground ring { size = studs across at its widest, time = seconds }, or nil
 		--   trailWidth  how much wider the ball's trail is than the base
+		--   swoosh      the bat's white swing arc { lifetime = seconds it lingers, width = studs }
 		TIERS = {
 			{
 				minPower = 0,
 				name = "pop",
-				tossHeight = 3,
+				tossHeight = 5,
 				hitStop = 0,
 				punch = 0,
 				crackVolume = 0.35,
@@ -165,11 +178,12 @@ local Tuning = {
 				dust = 0,
 				shockwave = nil,
 				trailWidth = 1,
+				swoosh = { lifetime = 0.1, width = 1.2 },
 			},
 			{
 				minPower = 25,
 				name = "solid",
-				tossHeight = 3.6,
+				tossHeight = 5.5,
 				hitStop = 0.02,
 				punch = 2,
 				crackVolume = 0.5,
@@ -178,11 +192,12 @@ local Tuning = {
 				dust = 0,
 				shockwave = nil,
 				trailWidth = 1.2,
+				swoosh = { lifetime = 0.12, width = 1.6 },
 			},
 			{
 				minPower = 200,
 				name = "crush",
-				tossHeight = 4.2,
+				tossHeight = 6,
 				hitStop = 0.035,
 				punch = 4,
 				crackVolume = 0.7,
@@ -191,11 +206,12 @@ local Tuning = {
 				dust = 6,
 				shockwave = nil,
 				trailWidth = 1.5,
+				swoosh = { lifetime = 0.14, width = 2 },
 			},
 			{
 				minPower = 2000,
 				name = "blast",
-				tossHeight = 4.8,
+				tossHeight = 6.5,
 				hitStop = 0.05,
 				punch = 6,
 				crackVolume = 0.85,
@@ -204,11 +220,12 @@ local Tuning = {
 				dust = 10,
 				shockwave = { size = 14, time = 0.35 },
 				trailWidth = 2,
+				swoosh = { lifetime = 0.17, width = 2.5 },
 			},
 			{
 				minPower = 20000,
 				name = "launch",
-				tossHeight = 5.5,
+				tossHeight = 7,
 				hitStop = 0.06,
 				punch = 9,
 				crackVolume = 1,
@@ -217,6 +234,7 @@ local Tuning = {
 				dust = 16,
 				shockwave = { size = 24, time = 0.45 },
 				trailWidth = 2.6,
+				swoosh = { lifetime = 0.2, width = 3 },
 			},
 		},
 	},

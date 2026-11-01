@@ -1,11 +1,14 @@
 --!strict
--- FungoController: one tap = toss and swing in one motion (Tuning.Fungo). The batter turns to the
--- field and stops walking, the swing animation plays (SwingAnimator: toss, load, swing,
--- follow-through), the ball leaves the glove hand on its "Release" marker and comes down onto
--- the bat; "Contact" plays the crack, sparks and camera punch and starts the hit-stop, and the
--- ball leaves the bat Fungo.CONTACT_AT after the tap, from wherever the batter stands in the
--- hitting circle; it flies down their lane (BallController.Launch). Walking comes back then.
--- Every toss is a hit.
+-- FungoController: one tap = toss and swing in one motion (Tuning.Fungo). The batter turns to face
+-- the field (and keeps walking: they strafe), the swing animation plays (SwingAnimator: toss,
+-- load, swing, follow-through), the ball leaves the glove hand on its "Release" marker and comes
+-- down onto the bat, which it follows as the batter moves; "Contact" plays the crack, sparks and
+-- camera punch and starts the hit-stop, and the ball leaves the bat Fungo.CONTACT_AT after the
+-- tap. It starts inside the hitting zone (shared/HitZone: from the bat, or the zone's nearest
+-- point if the batter is outside it) and flies straight down +Z from the batter's X
+-- (BallController.Launch). Every toss is a hit, with or without a lane.
+-- A white swoosh trail follows the bat from the "SwooshOn" to the "SwooshOff" marker, with a
+-- whoosh. Local only (others see the swing animation, not the trail).
 --   FungoController.Toss() -> true if this tap tossed (or will, see below); false if a toss is
 --                             already playing (one per cycle) or the game isn't ready yet.
 -- The one way to swing in Fungo mode: taps (InputController) and, later, Auto-Swing both call
@@ -26,6 +29,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Formulas = require(Shared:WaitForChild("Formulas"))
+local HitZone = require(Shared:WaitForChild("HitZone"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Signal = require(Shared:WaitForChild("Signal"))
 local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
@@ -33,7 +37,6 @@ local Tuning = require(Shared:WaitForChild("Config"):WaitForChild("Tuning"))
 local Controllers = script.Parent
 local BallController = require(Controllers.BallController)
 local CameraController = require(Controllers.CameraController)
-local PitcherController = require(Controllers.PitcherController)
 local StateController = require(Controllers.StateController)
 local Modules = Controllers.Parent:WaitForChild("Modules")
 local BatSwing = require(Modules:WaitForChild("BatSwing"))
@@ -42,6 +45,8 @@ local SwingData = require(Modules:WaitForChild("SwingData"))
 
 local CRACK_SOUND = "rbxasset://sounds/snap.wav" -- built into the Roblox client
 local BOOM_SOUND = "rbxasset://sounds/bass.wav" -- under the shockwave tiers
+local WHOOSH_SOUND = "rbxasset://sounds/swordslash.wav" -- the swing, at SwooshOn (built in)
+local TURN_TIME = 0.08 -- seconds to turn to face the field at the tap
 local BALL_SIZE = 0.9
 local FIELD = Vector3.zAxis -- lanes fire down +Z
 
@@ -61,14 +66,16 @@ local dust: ParticleEmitter
 local ring: Part
 local crack: Sound
 local boom: Sound
+local whoosh: Sound
+local trail: Trail? = nil -- the local character's swoosh
 local baseFov = 70
 
 local busyUntil = 0 -- os.clock() this toss's swing is over
 local nextReadyAt = 0 -- earliest the next toss may start (the server's minimum gap)
 local held = false -- a tap is waiting for nextReadyAt
 local lastId = 0 -- toss ids go up by one; the server refuses any it has seen
-local savedWalkSpeed: number? = nil -- while the swing roots the batter
-local holdAt: Vector3? = nil -- where the toss ball sits on the bat during the hit-stop
+local turnId = 0 -- the latest facing turn; an older one never restores AutoRotate
+local swooshId = 0 -- the latest swoosh; an older one's backup never turns it off
 
 local function settings(): any
 	local data = StateController.Get()
@@ -145,10 +152,14 @@ local function playImpact(tier: any, strike: Vector3)
 end
 
 -- Moves the tossed ball: up from the hand to the apex, then down to the strike point, arriving
--- at `arriveAt` (os.clock()), then holds there for the hit-stop until `launchAt`.
+-- at `arriveAt` (os.clock()), then holds on `holdAt()` for the hit-stop until `launchAt`.
+-- It moves with the batter: the path is relative to `base()` (the root's position now), and
+-- `strikeAt()` is re-read every frame, so the ball meets the bat while they walk.
 local function playToss(
 	hand: Vector3,
-	strike: Vector3,
+	base: () -> Vector3,
+	strikeAt: () -> Vector3,
+	holdAt: () -> Vector3,
 	height: number,
 	startAt: number,
 	arriveAt: number,
@@ -158,9 +169,12 @@ local function playToss(
 	-- lands on it exactly at `arriveAt`. Solve the gravity and launch speed that do that:
 	--   peak above the hand  A = strike.Y + height - hand.Y = v^2 / (2g)
 	--   drop at the end      B = strike.Y - hand.Y          = v T - g T^2 / 2
+	local origin = base()
+	local handRel = hand - origin
+	local strike0 = strikeAt() - origin
 	local flight = math.max(arriveAt - startAt, 0.05)
-	local above = math.max(strike.Y + height - hand.Y, 0.1)
-	local drop = strike.Y - hand.Y
+	local above = math.max(strike0.Y + height - handRel.Y, 0.1)
+	local drop = strike0.Y - handRel.Y
 	local root = (math.sqrt(2 * above) + math.sqrt(math.max(2 * (above - drop), 0))) / flight
 	local gravity = root * root
 	local up = math.sqrt(2 * gravity * above)
@@ -176,12 +190,94 @@ local function playToss(
 		end
 		if now < arriveAt then
 			local t = math.max(now - startAt, 0)
-			local flat = hand:Lerp(strike, t / flight)
-			tossBall.Position = Vector3.new(flat.X, hand.Y + up * t - gravity * t * t / 2, flat.Z)
+			local a = t / flight
+			local at = base()
+			local strike = strikeAt() - at
+			local flat = handRel:Lerp(strike, a)
+			-- The solved arc, plus any change in the strike height since the release (a jump).
+			local y = handRel.Y + up * t - gravity * t * t / 2 + (strike.Y - strike0.Y) * a
+			tossBall.Position = at + Vector3.new(flat.X, y, flat.Z)
 		else
-			tossBall.Position = holdAt or strike -- hit-stop: frozen on the bat
+			tossBall.Position = holdAt() -- hit-stop: on the bat
 		end
 	end)
+end
+
+-- Where a hit's ball starts: the bat's point inside the hitting zone (or behind it, between its
+-- sides), else the zone's nearest point. Every tap hits from somewhere in the zone.
+local function ballStart(point: Vector3): Vector3
+	local back = Tuning.World.HIT_ZONE.back
+	if HitZone.contains(point) or (point.Z < back and math.abs(point.X) <= HitZone.halfWidth()) then
+		return point
+	end
+	return HitZone.clamp(point)
+end
+
+-- The swoosh: a white trail between the bat's TrailBase and TrailTip (WorldService), made once
+-- per character. Width comes from the attachments' distance, so TrailBase is moved along the bat
+-- for each tier (a local change). Visual only.
+local function setupTrail(character: Model)
+	trail = nil
+	local bat = character:WaitForChild("Bat", 10)
+	if bat == nil or not bat:IsA("BasePart") then
+		return
+	end
+	local base = bat:WaitForChild("TrailBase", 5)
+	local tip = bat:WaitForChild("TrailTip", 5)
+	if base == nil or tip == nil or not base:IsA("Attachment") or not tip:IsA("Attachment") then
+		return
+	end
+	if player.Character ~= character then
+		return
+	end
+	local t = Instance.new("Trail")
+	t.Name = "Swoosh"
+	t.Attachment0 = base
+	t.Attachment1 = tip
+	t.Color = ColorSequence.new(Color3.new(1, 1, 1))
+	t.LightEmission = 1
+	t.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	t.FaceCamera = false
+	t.MinLength = 0
+	t.Enabled = false
+	t.Parent = bat
+	trail = t
+end
+
+local function swooshOn(tier: any)
+	local t = trail
+	if t and t.Parent then
+		local options = settings()
+		local look = tier.swoosh or { lifetime = 0.12, width = 1.5 }
+		local base = t.Attachment0 :: Attachment
+		local tip = t.Attachment1 :: Attachment
+		local handleEnd = -(base.Parent :: BasePart).Size.X / 2
+		base.Position = Vector3.new(math.max(tip.Position.X - look.width, handleEnd), 0, 0)
+		t.Lifetime = if options.lowGraphics then look.lifetime / 2 else look.lifetime
+		t:Clear()
+		t.Enabled = true
+	end
+	swooshId += 1
+	local id = swooshId
+	-- Backup for a SwooshOff marker that never fires.
+	task.delay(0.5, function()
+		if swooshId == id and trail then
+			trail.Enabled = false
+		end
+	end)
+	if settings().sfx ~= false then
+		whoosh.TimePosition = 0
+		whoosh:Play()
+	end
+end
+
+local function swooshOff()
+	if trail then
+		trail.Enabled = false
+	end
 end
 
 -- Where the bat's barrel meets the ball right now (BatPose: the barrel's sweet spot).
@@ -198,11 +294,11 @@ local function startToss(): boolean
 	local data = StateController.Get()
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local lane = PitcherController.GetLane()
-	local laneStrikeAt = lane and lane:FindFirstChild("StrikePoint", true) :: Attachment?
-	if data == nil or root == nil or laneStrikeAt == nil then
+	if data == nil or character == nil or root == nil then
 		return false
 	end
+	local body = character :: Model
+	local rootPart = root :: BasePart
 	local f = Tuning.Fungo
 	local now = os.clock()
 	lastId += 1
@@ -215,53 +311,74 @@ local function startToss(): boolean
 	local predicted = BallController.PredictDistance()
 	nextReadyAt = now + f.CONTACT_AT + Formulas.ballCamTime(predicted, Tuning.Reveal.MIN_SHOWN)
 
-	-- Face the field and stand still for the swing (no foot sliding); movement comes back when
-	-- the ball leaves the bat, during the follow-through.
-	local humanoid = (character :: Model):FindFirstChildOfClass("Humanoid")
-	local facing = CFrame.lookAt(root.Position, root.Position + FIELD)
-	root.CFrame = facing
-	if humanoid then
-		savedWalkSpeed = savedWalkSpeed or humanoid.WalkSpeed
-		humanoid.WalkSpeed = 0
-		humanoid.AutoRotate = false
-	end
-	local function unroot()
-		if humanoid and savedWalkSpeed then
-			humanoid.WalkSpeed = savedWalkSpeed
-			humanoid.AutoRotate = true
-		end
-		savedWalkSpeed = nil
-	end
-
 	-- Where the bat meets the ball: the animation's contact point (SwingData), else in front of
-	-- the batter. From anywhere in the hitting circle; a tap from outside it still hits, from
-	-- the nearest point of the circle, so the ball always starts in the player's own lane.
+	-- the batter, relative to the root facing the field.
 	local tierData = if SwingAnimator.HasSwing(tierIndex) then SwingData.TIERS[tierIndex] else nil
 	local contactAt = if tierData then tierData.contact else f.CONTACT_AT
-	local front = if tierData
-		then facing:PointToWorldSpace(tierData.point)
-		else facing:PointToWorldSpace(Vector3.new(f.STRIKE_SIDE, 0, -f.STRIKE_FORWARD))
-	local strikeY = if tierData then front.Y else Tuning.World.STRIKE_HEIGHT
-	local laneStrike = laneStrikeAt.WorldPosition
-	local offset = Vector3.new(front.X - laneStrike.X, 0, front.Z - laneStrike.Z)
-	local radius = Tuning.World.HIT_CIRCLE_RADIUS
-	if offset.Magnitude > radius then
-		offset = offset.Unit * radius
+
+	-- Turn to face the field over TURN_TIME; walking carries on (only the rotation is set).
+	-- AutoRotate comes back just after contact.
+	local humanoid = body:FindFirstChildOfClass("Humanoid")
+	turnId += 1
+	local myTurn = turnId
+	if humanoid then
+		local h: Humanoid = humanoid
+		h.AutoRotate = false
+		local look = rootPart.CFrame.LookVector
+		local fromYaw = math.atan2(-look.X, -look.Z)
+		local toYaw = math.pi -- facing +Z
+		local delta = (toYaw - fromYaw + math.pi) % (2 * math.pi) - math.pi
+		local turn: RBXScriptConnection
+		turn = RunService.RenderStepped:Connect(function()
+			local a = math.clamp((os.clock() - now) / TURN_TIME, 0, 1)
+			if rootPart.Parent == nil or turnId ~= myTurn then
+				turn:Disconnect()
+				return
+			end
+			rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, fromYaw + delta * a, 0)
+			if a >= 1 then
+				turn:Disconnect()
+			end
+		end)
+		task.delay(contactAt + 0.1, function()
+			if turnId == myTurn and h.Parent then
+				h.AutoRotate = true
+			end
+		end)
 	end
-	local strike = Vector3.new(laneStrike.X + offset.X, strikeY, laneStrike.Z + offset.Z)
+
+	-- The contact point follows the batter: recomputed from where the root is now.
+	local function base(): Vector3
+		return rootPart.Position
+	end
+	local function strikeAt(): Vector3
+		local facing = CFrame.lookAt(rootPart.Position, rootPart.Position + FIELD)
+		if tierData then
+			return facing:PointToWorldSpace(tierData.point)
+		end
+		local front = facing:PointToWorldSpace(Vector3.new(f.STRIKE_SIDE, 0, -f.STRIKE_FORWARD))
+		return Vector3.new(front.X, Tuning.World.STRIKE_HEIGHT, front.Z)
+	end
+	local contacted = false
+	-- Where the ball is on the bat: after Contact, the bat's real sweet spot (the baked point
+	-- fits the default body; other proportions put the bat elsewhere).
+	local function onBat(): Vector3
+		if contacted then
+			return batSweetSpot(body) or strikeAt()
+		end
+		return strikeAt()
+	end
 	local function handPosition(): Vector3
-		local handPart = (character :: Model):FindFirstChild("LeftHand")
-			or (character :: Model):FindFirstChild("Left Arm")
-		return if handPart and handPart:IsA("BasePart") then handPart.Position else root.Position
+		local handPart = body:FindFirstChild("LeftHand") or body:FindFirstChild("Left Arm")
+		return if handPart and handPart:IsA("BasePart") then handPart.Position else rootPart.Position
 	end
 
 	local launchAt = now + f.CONTACT_AT
-	holdAt = nil
 	local launched, impacted = false, false
 	local function impact()
 		if not impacted then
 			impacted = true
-			playImpact(tier, strike)
+			playImpact(tier, onBat())
 		end
 	end
 	local function launch()
@@ -270,34 +387,37 @@ local function startToss(): boolean
 		end
 		launched = true
 		impact()
-		unroot()
 		SwingAnimator.ContactDone()
-		BallController.Launch(hitId, strike, laneStrike, { trailWidth = tier.trailWidth })
+		local strike = ballStart(onBat())
+		BallController.Launch(hitId, strike, HitZone.lineOrigin(strike.X), { trailWidth = tier.trailWidth })
 		FungoController.Contact:Fire(hitId, tierIndex)
 	end
 
 	local animated = SwingAnimator.Swing(tierIndex, {
 		-- The glove hand lets go: the ball goes up and comes down onto the bat at contact.
 		release = function()
-			playToss(handPosition(), strike, tier.tossHeight, os.clock(), now + contactAt, launchAt)
+			playToss(
+				handPosition(),
+				base,
+				strikeAt,
+				onBat,
+				tier.tossHeight,
+				os.clock(),
+				now + contactAt,
+				launchAt
+			)
 		end,
 		-- Bat on ball: crack, sparks and camera punch now; the ball leaves the bat after the
 		-- hit-stop, which the animation holds (so it's always CONTACT_AT after the tap).
 		contact = function()
-			-- The baked contact point fits the default body; on other proportions the bat is
-			-- elsewhere, so launch from the bat's real sweet spot (still in the circle).
-			local actual = batSweetSpot(character :: Model)
-			if actual then
-				local o = Vector3.new(actual.X - laneStrike.X, 0, actual.Z - laneStrike.Z)
-				if o.Magnitude > radius then
-					o = o.Unit * radius
-				end
-				strike = Vector3.new(laneStrike.X + o.X, actual.Y, laneStrike.Z + o.Z)
-				holdAt = strike
-			end
+			contacted = true
 			impact()
 			task.delay(math.max(launchAt - os.clock(), 0), launch)
 		end,
+		swooshOn = function()
+			swooshOn(tier)
+		end,
+		swooshOff = swooshOff,
 	})
 	if animated then
 		-- Backup for a marker that never fires (an animation that didn't load in time).
@@ -305,7 +425,7 @@ local function startToss(): boolean
 	else
 		-- The simple swing (R6, or no animation ids outside Studio).
 		local arriveAt = launchAt - tier.hitStop
-		playToss(handPosition(), strike, tier.tossHeight, now, arriveAt, launchAt)
+		playToss(handPosition(), base, strikeAt, strikeAt, tier.tossHeight, now, arriveAt, launchAt)
 		local s = Tuning.Swing
 		task.delay(math.max(arriveAt - now - s.TO_CONTACT, 0), function()
 			BatSwing.Play(player.Character, {
@@ -315,6 +435,10 @@ local function startToss(): boolean
 				recover = s.RECOVER,
 			})
 		end)
+		task.delay(math.max(arriveAt - now - 0.1, 0), function()
+			swooshOn(tier)
+		end)
+		task.delay(arriveAt - now + 0.15, swooshOff)
 		task.delay(f.CONTACT_AT, launch)
 	end
 	return true
@@ -392,11 +516,20 @@ function FungoController.Init()
 	crack = sound(CRACK_SOUND)
 	boom = sound(BOOM_SOUND)
 	boom.PlaybackSpeed = 0.6
+	whoosh = sound(WHOOSH_SOUND)
+	whoosh.Volume = 0.5
 end
 
 function FungoController.Start()
 	baseFov = workspace.CurrentCamera.FieldOfView
 	SwingAnimator.Start(CameraController.IsActive)
+	player.CharacterAdded:Connect(function(character)
+		turnId += 1 -- a fresh Humanoid already has AutoRotate on
+		task.spawn(setupTrail, character)
+	end)
+	if player.Character then
+		task.spawn(setupTrail, player.Character)
+	end
 	-- Ids must keep going up past the server's: start after any hit it already knows.
 	Remotes.Event("HitResult").OnClientEvent:Connect(function(result: any)
 		if type(result) == "table" and type(result.hitId) == "number" and result.hitId > lastId then

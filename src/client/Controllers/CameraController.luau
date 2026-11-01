@@ -1,13 +1,16 @@
 --!strict
--- CameraController: the ball-cam. On every hit the camera snaps behind the ball, follows it
--- (the ball itself slows down near the end, see BallController), stays on the landing for the
--- catch reveal (Formulas.revealTime: 1s, or longer for a new rare species), then returns to the
--- batter: a quick swoop for short hits, a fade cut for long ones.
--- Afterwards the normal Roblox camera takes over again exactly where it was before the hit.
+-- CameraController: the ball-cam. On every hit the camera first stays on the batter for a short
+-- beat (Fungo.CAMERA_BEAT, so the follow-through is seen), then glides onto the ball
+-- (Fungo.CAMERA_GLIDE, half that for long hits) and follows it (the ball itself slows down near
+-- the end, see BallController), stays on the landing for the catch reveal (Formulas.revealTime:
+-- 1s, or longer for a new rare species), then returns to the batter: a quick swoop for short
+-- hits, a fade cut for long ones. The batter view is kept relative to the batter, who can walk
+-- during the flight, so the camera comes back behind them where they stand now.
+-- Afterwards the normal Roblox camera takes over again.
 -- The server times the next pitch from the same numbers (Formulas.ballCamTime).
 -- Ending the reveal early (a tap, or the server's result arriving too late to know the catch)
 -- sends Ready, so the server can bring the next pitch forward; it never waits on the client.
---   CameraController.IsActive()   -> true while the camera is away from the batter
+--   CameraController.IsActive()   -> true from the hit until the camera is back on the batter
 --   CameraController.SkipReveal() -> ends the reveal now if one is showing; true if it did
 --   CameraController.RevealStarted / RevealEnded, SetRevealCamera(fn) -> for CatchRevealController
 
@@ -28,11 +31,16 @@ local GROUND_Y = 0
 
 local player = Players.LocalPlayer
 
-type Phase = "follow" | "hold" | "return"
+type Phase = "beat" | "glide" | "follow" | "hold" | "return"
 
 type Cam = {
 	hitId: number,
-	saved: CFrame, -- the batter view to come back to
+	saved: CFrame, -- the batter view in world space (fallback when there is no root)
+	-- The batter view relative to the batter's position (not their facing: a batter who turns
+	-- while the ball flies still gets the view down the field back).
+	savedOffset: CFrame?,
+	captured: boolean, -- saved/savedOffset hold the real batter view (taken at the takeover)
+	takeoverFrom: CFrame?, -- where the glide starts
 	distance: number,
 	phase: Phase,
 	landing: Vector3?,
@@ -61,6 +69,25 @@ local revealCamera: ((hitId: number, elapsed: number) -> CFrame?)? = nil
 
 local function camera(): Camera
 	return workspace.CurrentCamera
+end
+
+local function rootPart(): BasePart?
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		return root
+	end
+	return nil
+end
+
+-- The view to come back to, behind the batter where they stand now.
+local function batterView(state: Cam): CFrame
+	local root = rootPart()
+	local offset = state.savedOffset
+	if root and offset then
+		return CFrame.new(root.Position) * offset
+	end
+	return state.saved
 end
 
 local function smoothing(dt: number): number
@@ -93,7 +120,7 @@ local function restore(snapBack: boolean)
 	fade.BackgroundTransparency = 1
 	local current = camera()
 	if state and snapBack then
-		current.CFrame = state.saved
+		current.CFrame = batterView(state)
 	end
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -113,17 +140,35 @@ local function beginReturn(state: Cam, skipped: boolean?)
 	state.distance = BallController.GetDistance(state.hitId) or state.distance
 end
 
-local function onLaunched(hitId: number, info: any)
+-- Ends the beat: keeps the batter view (once per run of hits) and takes the camera over.
+local function takeover(state: Cam)
 	local current = camera()
-	if cam then
-		endReveal(cam, true) -- a new hit (lag let a pitch through) ends the old reveal
+	if not state.captured then
+		state.captured = true
+		state.saved = current.CFrame
+		local root = rootPart()
+		state.savedOffset = if root then current.CFrame - root.Position else nil
 	end
-	local saved = if cam then cam.saved else current.CFrame
+	state.takeoverFrom = current.CFrame
+	current.CameraType = Enum.CameraType.Scriptable
+	state.phase = "glide"
+	state.phaseStart = os.clock()
+end
+
+local function onLaunched(hitId: number, info: any)
+	local previous = cam
+	if previous then
+		endReveal(previous, true) -- a new hit (lag let a pitch through) ends the old reveal
+	end
+	-- Stay on the batter for the beat: no Scriptable, no snap. A new hit keeps the old view.
 	cam = {
 		hitId = hitId,
-		saved = saved,
+		saved = if previous then previous.saved else camera().CFrame,
+		savedOffset = if previous then previous.savedOffset else nil,
+		captured = if previous then previous.captured else false,
+		takeoverFrom = nil,
 		distance = info.distance,
-		phase = "follow",
+		phase = "beat",
 		landing = nil,
 		phaseStart = os.clock(),
 		returnFrom = nil,
@@ -132,12 +177,6 @@ local function onLaunched(hitId: number, info: any)
 		cutIn = false,
 	}
 	fade.BackgroundTransparency = 1
-	current.CameraType = Enum.CameraType.Scriptable
-	-- Snap straight behind the ball at contact.
-	local ball = BallController.GetBallPosition(hitId)
-	if ball then
-		current.CFrame = chaseCFrame(ball, 0)
-	end
 end
 
 local function onTouchdown(
@@ -148,8 +187,15 @@ local function onTouchdown(
 	isFinal: boolean
 )
 	local state = cam
-	if state == nil or state.hitId ~= hitId or not isFinal or state.phase ~= "follow" then
+	if state == nil or state.hitId ~= hitId or not isFinal then
 		return
+	end
+	local phase = state.phase
+	if phase ~= "beat" and phase ~= "glide" and phase ~= "follow" then
+		return
+	end
+	if phase == "beat" then
+		takeover(state)
 	end
 	state.landing = position
 	local reveal = revealTimes[hitId]
@@ -193,17 +239,52 @@ local function step(dt: number)
 	end
 	local c = Tuning.Camera
 	local current = camera()
+	local now = os.clock()
+
+	-- The ball was dropped: come back. No reveal will play, so let the server shorten its gap
+	-- too (it ignores repeats).
+	local function dropped()
+		beginReturn(state)
+		Remotes.Event("Ready"):FireServer(state.hitId)
+	end
+
+	if state.phase == "beat" then
+		-- The Roblox camera still has the batter; only the clock is watched here.
+		if BallController.GetBallPosition(state.hitId) == nil then
+			takeover(state)
+			dropped()
+		elseif now - state.phaseStart >= Tuning.Fungo.CAMERA_BEAT then
+			takeover(state)
+		end
+		return
+	end
+
 	if current.CameraType ~= Enum.CameraType.Scriptable then
 		current.CameraType = Enum.CameraType.Scriptable -- something reset it mid-flight
 	end
-	local now = os.clock()
 
-	if state.phase == "follow" then
+	if state.phase == "glide" then
 		local ball = BallController.GetBallPosition(state.hitId)
 		if ball == nil then
-			beginReturn(state) -- the ball was dropped; come back
-			-- No reveal will play, so let the server shorten its gap too (it ignores repeats).
-			Remotes.Event("Ready"):FireServer(state.hitId)
+			dropped()
+			return
+		end
+		local glide = Tuning.Fungo.CAMERA_GLIDE
+		if state.distance > c.CUT_BEYOND then
+			glide /= 2
+		end
+		local a = if glide > 0 then math.clamp((now - state.phaseStart) / glide, 0, 1) else 1
+		local eased = a * a * (3 - 2 * a) -- smoothstep
+		local from = state.takeoverFrom or current.CFrame
+		current.CFrame = from:Lerp(chaseCFrame(ball, 0), eased)
+		if a >= 1 then
+			state.phase = "follow"
+			state.phaseStart = now
+		end
+	elseif state.phase == "follow" then
+		local ball = BallController.GetBallPosition(state.hitId)
+		if ball == nil then
+			dropped()
 			return
 		end
 		-- Stay exactly BACK studs behind the ball along the track (smoothing there would lag
@@ -233,10 +314,8 @@ local function step(dt: number)
 			if elapsed < half then
 				fade.BackgroundTransparency = 1 - elapsed / half
 			else
-				if not state.cutSwapped then
-					state.cutSwapped = true
-					current.CFrame = state.saved
-				end
+				state.cutSwapped = true
+				current.CFrame = batterView(state) -- follows the batter while fading in
 				fade.BackgroundTransparency = math.min((elapsed - half) / half, 1)
 				if elapsed >= c.CUT_TIME then
 					restore(true)
@@ -245,7 +324,7 @@ local function step(dt: number)
 		else
 			local a = math.clamp(elapsed / c.RETURN_TIME, 0, 1)
 			local eased = a * a * (3 - 2 * a) -- smoothstep
-			current.CFrame = (state.returnFrom :: CFrame):Lerp(state.saved, eased)
+			current.CFrame = (state.returnFrom :: CFrame):Lerp(batterView(state), eased)
 			if a >= 1 then
 				restore(true)
 			end

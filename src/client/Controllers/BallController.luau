@@ -1,12 +1,13 @@
 --!strict
 -- BallController: draws balls. Cosmetic only; the server decides every number.
 --   BeginToss(hitId)           -> Fungo: a toss for this hit has started (its HitResult may come first)
---   Launch(hitId, strike, laneStrike, style?)
---                              -> Fungo: at bat-on-ball the ball launches from `strike` (where the
---                                 batter stands in the hitting circle) and lands on the lane's centre
---                                 line (`laneStrike` = the lane's StrikePoint), flying to the server's
---                                 distance if it's here, else the predicted one. style.trailWidth
---                                 widens the trail (visual only).
+--   Launch(hitId, strike, lineOrigin, style?)
+--                              -> Fungo: at bat-on-ball the ball launches from `strike` (the bat,
+--                                 inside the hitting zone) and lands on the line straight down the
+--                                 field from `lineOrigin` (HitZone.lineOrigin(x): the hit line at the
+--                                 batter's X), `segment.to` studs past the hit line, flying to the
+--                                 server's distance if it's here, else the predicted one.
+--                                 style.trailWidth widens the trail (visual only).
 --   ShowPitch(pitch, from, to) -> machine: ball travels from the pitcher to the strike point (and past it if unswung)
 --   Hit(pitchId)               -> machine: on tap the ball launches at once (CLAUDE.md guardrail 3), flying to a
 --                                 predicted distance from the same formulas the server uses
@@ -66,7 +67,7 @@ type Flight = {
 	hitId: number,
 	ball: Ball,
 	strike: Vector3, -- where the hit started
-	laneStrike: Vector3, -- the lane's strike point: the ball lands on its line down the field
+	lineOrigin: Vector3, -- on the hit line: the ball lands on the line down the field from here
 	distance: number, -- total distance of the current plan
 	startedAt: number,
 	airTime: number, -- flight time without slow motion
@@ -87,7 +88,7 @@ local pitches: { [number]: PitchBall } = {}
 local flights: { Flight } = {}
 local liveCount = 0
 local lastStrike: Vector3? = nil -- strike point of the latest hit, for hits whose ball was dropped
-local lastLaneStrike: Vector3? = nil -- ... and its lane's strike point
+local lastLineOrigin: Vector3? = nil -- ... and its flight line's origin
 -- Fungo tosses started but not launched yet: the server's result for one may arrive first.
 local tossing: { [number]: { at: number, result: any? } } = {}
 local pitcherBonus = 1 -- the active pitcher's Power bonus, from the last HitResult
@@ -176,7 +177,7 @@ function BallController.ShowPitch(pitch: HookTypes.Pitch, from: Vector3, to: Vec
 	end
 	ball.part.Position = from
 	lastStrike = to
-	lastLaneStrike = to
+	lastLineOrigin = to
 	pitches[pitch.pitchId] = { ball = ball, pitch = pitch, from = from, to = to }
 end
 
@@ -199,14 +200,15 @@ local function findFlight(hitId: number): Flight?
 end
 
 -- Legs for a set of flight segments starting at `strike` and landing on the line down the field
--- from `laneStrike` (the same spot for the pitching machine; anywhere in the circle for Fungo).
+-- from `lineOrigin` (the lane's StrikePoint for the pitching machine; the hit line at the
+-- batter's X for Fungo).
 local function planLegs(
 	strike: Vector3,
-	laneStrike: Vector3,
+	lineOrigin: Vector3,
 	segments: { any },
 	total: number
 ): ({ Leg }, number)
-	local ground = laneStrike - Vector3.new(0, Tuning.World.STRIKE_HEIGHT - GROUND_OFFSET, 0)
+	local ground = lineOrigin - Vector3.new(0, Tuning.World.STRIKE_HEIGHT - GROUND_OFFSET, 0)
 	local f = Tuning.Flight
 	local airTime = Formulas.airTime(total)
 	local legs: { Leg } = {}
@@ -232,19 +234,19 @@ local function launch(
 	hitId: number,
 	ball: Ball,
 	strike: Vector3,
-	laneStrike: Vector3,
+	lineOrigin: Vector3,
 	segments: { any },
 	total: number
 )
-	local legs, airTime = planLegs(strike, laneStrike, segments, total)
+	local legs, airTime = planLegs(strike, lineOrigin, segments, total)
 	local now = os.clock()
 	lastStrike = strike
-	lastLaneStrike = laneStrike
+	lastLineOrigin = lineOrigin
 	local flight: Flight = {
 		hitId = hitId,
 		ball = ball,
 		strike = strike,
-		laneStrike = laneStrike,
+		lineOrigin = lineOrigin,
 		distance = total,
 		startedAt = now,
 		airTime = airTime,
@@ -311,7 +313,7 @@ end
 function BallController.Launch(
 	hitId: number,
 	strike: Vector3,
-	laneStrike: Vector3,
+	lineOrigin: Vector3,
 	style: { trailWidth: number? }?
 )
 	local entry = tossing[hitId]
@@ -327,10 +329,10 @@ function BallController.Launch(
 	end
 	local result = entry and entry.result
 	if result then
-		launch(hitId, ball, strike, laneStrike, result.segments, result.distance)
+		launch(hitId, ball, strike, lineOrigin, result.segments, result.distance)
 	else
 		local predicted = BallController.PredictDistance()
-		launch(hitId, ball, strike, laneStrike, { { from = 0, to = predicted, source = "hit" } }, predicted)
+		launch(hitId, ball, strike, lineOrigin, { { from = 0, to = predicted, source = "hit" } }, predicted)
 	end
 end
 
@@ -412,7 +414,7 @@ local function onHitResult(result: any)
 	local flight = findFlight(result.hitId)
 	if flight then
 		if flight.distance ~= result.distance then
-			local legs, airTime = planLegs(flight.strike, flight.laneStrike, result.segments, result.distance)
+			local legs, airTime = planLegs(flight.strike, flight.lineOrigin, result.segments, result.distance)
 			flight.distance = result.distance
 			if flight.touched < #flight.legs then
 				-- Still in the air: re-plan to the server's flight.
@@ -441,10 +443,10 @@ local function onHitResult(result: any)
 	local entry = pitches[result.hitId]
 	pitches[result.hitId] = nil
 	local strike = if entry then entry.to else lastStrike
-	local laneStrike = if entry then entry.to else lastLaneStrike
+	local lineOrigin = if entry then entry.to else lastLineOrigin
 	local ball = if entry then entry.ball else acquire()
-	if strike and laneStrike and ball then
-		launch(result.hitId, ball, strike, laneStrike, result.segments, result.distance)
+	if strike and lineOrigin and ball then
+		launch(result.hitId, ball, strike, lineOrigin, result.segments, result.distance)
 	elseif ball then
 		release(ball)
 	end

@@ -10,6 +10,11 @@
         "$path": "assets/Animations"
       }
     },
+    "ReplicatedFirst": {
+      "Preload": {
+        "$path": "src/first"
+      }
+    },
     "ServerScriptService": {
       "Server": {
         "$path": "src/server"
@@ -24,7 +29,8 @@
     },
     "Workspace": {
       "$properties": {
-        "StreamingEnabled": true
+        "StreamingEnabled": true,
+        "StreamOutBehavior": "LowMemory"
       }
     },
     "Lighting": {

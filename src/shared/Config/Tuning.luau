@@ -36,10 +36,12 @@ local Tuning = {
 		PER_HIT = 1, -- the "+1": Power gained per hit, before multipliers
 	},
 
-	-- distance = BASE + PER_POWER * power ^ EXPONENT, using total Power after the hit
+	-- distance = BASE + PER_POWER * power ^ EXPONENT, using total Power after the hit.
+	-- PER_POWER 10 reaches Windy Highlands (165 studs) on hit 15, about 50s in (about 40s with
+	-- every landing hold skipped). CLAUDE.md: Biome 2 within 60s.
 	Distance = {
 		BASE = 20,
-		PER_POWER = 4,
+		PER_POWER = 10,
 		EXPONENT = 1,
 	},
 

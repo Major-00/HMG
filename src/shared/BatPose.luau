@@ -1,6 +1,6 @@
 --!strict
 -- BatPose: where the bat sits in the batter's right hand. Shared so the server's grip (WorldService)
--- and the client's swing animation (InputController) agree. Directions are in the hand's own space:
+-- and the client's simple swing (BatSwing) agree. Directions are in the hand's own space:
 -- +X = batter's right, +Y = up the arm, -Z = forward. Cosmetic only.
 
 local BatPose = {}

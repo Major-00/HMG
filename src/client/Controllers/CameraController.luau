@@ -12,7 +12,7 @@
 -- sends Ready, so the server can bring the next pitch forward; it never waits on the client.
 --   CameraController.IsActive()   -> true from the hit until the camera is back on the batter
 --   CameraController.SkipReveal() -> ends the reveal now if one is showing; true if it did
---   CameraController.RevealStarted / RevealEnded, SetRevealCamera(fn) -> for CatchRevealController
+--   CameraController.RevealStarted / RevealEnded, SetRevealCamera(fn) -> for a future catch view
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -348,7 +348,7 @@ function CameraController.SkipReveal(): boolean
 	return true
 end
 
--- Sets the reveal's camera shot (CatchRevealController). Returning nil keeps the default view.
+-- Sets the reveal's camera shot (for a future catch view). Returning nil keeps the default view.
 function CameraController.SetRevealCamera(fn: (hitId: number, elapsed: number) -> CFrame?)
 	revealCamera = fn
 end

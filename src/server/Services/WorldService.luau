@@ -89,7 +89,8 @@ local function buildPitchingMachine(model: Model, origin: Vector3)
 		Shape = Enum.PartType.Cylinder,
 		Size = Vector3.new(2.5, 1.2, 1.2),
 		-- Cylinders run along X; turn it to run along Z, pointing at the plate.
-		CFrame = CFrame.new(machineAt + Vector3.new(0, w.STRIKE_HEIGHT, -1)) * CFrame.Angles(0, math.rad(90), 0),
+		CFrame = CFrame.new(machineAt + Vector3.new(0, w.STRIKE_HEIGHT, -1))
+			* CFrame.Angles(0, math.rad(90), 0),
 		Color = Color3.fromRGB(240, 140, 40),
 		Parent = machine,
 	})
@@ -209,7 +210,8 @@ local function giveBat(character: Model)
 		return
 	end
 	local handle = batPart(BAT_NAME, BatPose.HANDLE_LENGTH, BatPose.HANDLE_WIDTH, Color3.fromRGB(120, 80, 45))
-	local barrel = batPart("BatBarrel", BatPose.BARREL_LENGTH, BatPose.BARREL_WIDTH, Color3.fromRGB(200, 155, 95))
+	local barrel =
+		batPart("BatBarrel", BatPose.BARREL_LENGTH, BatPose.BARREL_WIDTH, Color3.fromRGB(200, 155, 95))
 
 	local join = Instance.new("Weld")
 	join.Part0 = handle

@@ -1,6 +1,6 @@
 --!strict
--- HitZone: the shared hitting zone, one dirt strip across every lane between the ballparks and
--- the hit line (Tuning.World.HIT_ZONE). Players walk anywhere and tap; the ball always starts
+-- HitZone: the shared hitting zone on the island's launch strip, across every lane, up to the
+-- hit line (Tuning.World.HIT_ZONE). Players walk anywhere and tap; the ball always starts
 -- inside the zone and flies straight down the field (+Z) from the batter's X. Distances are
 -- measured from the hit line, so biome crossings match the server, which never reads position.
 --   HitZone.halfWidth()      -> studs from the field's centre line to the zone's side edge

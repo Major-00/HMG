@@ -26,6 +26,27 @@
       "$properties": {
         "StreamingEnabled": true
       }
+    },
+    "Lighting": {
+      "$properties": {
+        "Ambient": [0.2745098, 0.2745098, 0.2745098],
+        "Brightness": 3,
+        "ClockTime": 14.5,
+        "ColorShift_Bottom": [0, 0, 0],
+        "ColorShift_Top": [0, 0, 0],
+        "EnvironmentDiffuseScale": 1,
+        "EnvironmentSpecularScale": 1,
+        "ExposureCompensation": 0,
+        "FogColor": [0.7529412, 0.7529412, 0.7529412],
+        "FogEnd": 100000,
+        "FogStart": 0,
+        "GeographicLatitude": 0,
+        "GlobalShadows": true,
+        "LightingStyle": "Soft",
+        "OutdoorAmbient": [0.2745098, 0.2745098, 0.2745098],
+        "PrioritizeLightingQuality": true,
+        "ShadowSoftness": 0.2
+      }
     }
   }
 }

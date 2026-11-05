@@ -16,7 +16,7 @@ export type Pitch = {
 -- PITCHER SLOT. Each player has exactly one active pitcher. Two kinds:
 --   "toss"  (Fungo, the default): the player's tap tosses and swings in one motion; the server
 --           allows one hit per cycle and sends no Pitch.
---   "throw" (the pitching machine; a pitcher pet may use it later): the server throws each
+--   "throw" (the pitching machine; a future pitcher may use it): the server throws each
 --           Pitch, and a tap hits the one in play.
 export type Pitcher = {
 	id: string,

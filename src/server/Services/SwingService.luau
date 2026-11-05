@@ -4,7 +4,7 @@
 -- +Power (x multiplier), then distance from total Power, the on-land hook, and a HitResult.
 -- The client has already drawn the hit; this confirms the numbers.
 -- The client sends only the id; every number is decided here, from stats only. Where the
--- player stands in the hitting circle never matters.
+-- player stands in the hitting zone never matters.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

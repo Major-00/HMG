@@ -1,7 +1,7 @@
 --!strict
 -- PitchingMachine: a Pitcher with mode "throw" (see HookTypes.Pitcher). Same timing for everyone,
 -- no Power bonus. Not the default any more (Fungo is) and not built in the scene; kept as the
--- second slot implementation, e.g. for a pitcher pet. WorldService builds its model only when it's
+-- second slot implementation, e.g. for a future pitcher. WorldService builds its model only when it's
 -- Tuning.Pitch.DEFAULT_PITCHER.
 -- Another pitcher is another module in this folder with the same shape and its own id.
 

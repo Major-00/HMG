@@ -10,10 +10,11 @@ Migrations.CURRENT_VERSION = 4
 
 -- Steps[n] upgrades a version-n save to version n + 1, editing it in place.
 local Steps: { [number]: (data: any) -> () } = {
-	-- v1 -> v2: the HomeRun Mascots economy. There were no live players, only test saves,
-	-- so v1 saves are wiped and the Template refills them on load. ProfileStore's Reconcile
-	-- only adds missing keys and never removes old ones (wins, pets, rebirths ...), so the
-	-- wipe has to be explicit. Run bumps the version after this step.
+	-- v1 -> v2 (history): this project started as another game, HomeRun Mascots, and v2 was
+	-- that game's save. There were no live players, only test saves, so v1 saves are wiped and
+	-- the Template refills them on load. ProfileStore's Reconcile only adds missing keys and
+	-- never removes old ones, so the wipe has to be explicit. Run bumps the version after this
+	-- step.
 	[1] = function(data)
 		table.clear(data)
 		data.version = 1
@@ -29,7 +30,21 @@ local Steps: { [number]: (data: any) -> () } = {
 	-- Index, stadium tiers and their settings are removed. Reconcile never removes keys, so
 	-- they go here. Only test saves exist.
 	[3] = function(data)
-		for _, key in { "cash", "bats", "balls", "park", "mascots", "nextMascotUid", "seats", "hotbar", "onDeck", "autoSell", "index", "stadiumTier" } do
+		local oldKeys = {
+			"cash",
+			"bats",
+			"balls",
+			"park",
+			"mascots",
+			"nextMascotUid",
+			"seats",
+			"hotbar",
+			"onDeck",
+			"autoSell",
+			"index",
+			"stadiumTier",
+		}
+		for _, key in oldKeys do
 			data[key] = nil
 		end
 		if type(data.settings) == "table" then

@@ -11,7 +11,7 @@ local Remotes = {}
 
 -- Client -> Server (RemoteEvent)
 Remotes.Events = {
-	"Swing", -- (pitchId: number). Always a hit if it matches the pitch in play; otherwise ignored.
+	"Swing", -- (id: number) a Fungo toss id or the machine's pitch id. One hit per cycle; repeats are ignored.
 	"Ready", -- (hitId: number). The landing hold for that hit was skipped; the next pitch may come sooner.
 }
 

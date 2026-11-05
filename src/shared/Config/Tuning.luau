@@ -37,31 +37,33 @@ local Tuning = {
 	},
 
 	-- distance = BASE + PER_POWER * power ^ EXPONENT, using total Power after the hit.
-	-- PER_POWER 10 reaches Windy Highlands (165 studs) on hit 15, about 50s in (about 40s with
-	-- every landing hold skipped). CLAUDE.md: Biome 2 within 60s.
+	-- Scaled with the map (1.25x, MaP/EXPORT_SPEC.md) so the pacing doesn't change: PER_POWER 12.5
+	-- reaches Windy Highlands (206 studs) on hit 15, about 50s in (about 40s with every landing
+	-- hold skipped). CLAUDE.md: Biome 2 within 60s.
 	Distance = {
-		BASE = 20,
-		PER_POWER = 10,
+		BASE = 25,
+		PER_POWER = 12.5,
 		EXPONENT = 1,
 	},
 
 	-- Where each biome starts, in studs from the hit line, in Config/Biomes order: each one is that
 	-- biome's floor edge on the island map (Meadow, Windy Highlands, Tundra, Jungle Ruins,
-	-- Coral Reef, Volcano). The lane ends at the Pyramids veil, 1,740 studs out.
-	BiomeStarts = { 0, 165, 365, 615, 915, 1290 },
+	-- Coral Reef, Volcano). The map is built at 1.25x the Blender layout (MaP/EXPORT_SPEC.md);
+	-- the lane ends at the Pyramids veil, 2,175 studs out.
+	BiomeStarts = { 0, 206, 456, 769, 1144, 1613 },
 
 	World = {
 		-- The island map's launch strip: its front edge is the hit line (Z = 0) and the lane runs
 		-- down +Z. Everyone spawns on the hub overlook (the map's Spawn marker).
 		LANE_COUNT = 5, -- batting lanes per server (one per player; set the place's max players to match)
-		LANE_SPACING = 6, -- studs between lanes, side to side (fits the 36-stud launch strip)
+		LANE_SPACING = 7.5, -- studs between lanes, side to side (fits the 45-stud launch strip)
 		PITCH_DISTANCE = 20, -- studs from the plate to the pitching machine (when it's used)
 		STRIKE_HEIGHT = 3, -- studs above the ground where the ball is hit
 		-- The shared hitting zone (shared/HitZone): the launch strip across every lane, from `back`
 		-- (the back of the launch strip) up to the hit line at `front`. Walk anywhere and tap:
 		-- a tap from outside it still hits, from the nearest point of the zone. Its width comes
 		-- from LANE_COUNT and LANE_SPACING. Distances are measured from the hit line (Z = front).
-		HIT_ZONE = { back = -10, front = 0 }, -- the island's launch strip
+		HIT_ZONE = { back = -12.5, front = 0 }, -- the island's launch strip (12.5 studs deep)
 	},
 
 	-- Client-only visuals (no effect on stats)

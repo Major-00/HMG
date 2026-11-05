@@ -24,3 +24,6 @@ sourcemap.json
 ._*
 Thumbs.db
 desktop.ini
+
+# Map export data (rebuilt from MaP/HubBlock.blend; see MaP/EXPORT_SPEC.md)
+MaP/export/

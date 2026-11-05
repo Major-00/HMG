@@ -10,6 +10,9 @@ is under **Planned** at the end. Guardrails and hard rules: [CLAUDE.md](../CLAUD
 - **Saves use ProfileStore.**
 - **One world.** The island's one straight lane leaves the hub through six biomes and ends at the
   Pyramids' sandstorm veil.
+- **The map.** `Workspace.Map` is built in Studio from `MaP/HubBlock.blend` at 1.25x scale, by the
+  steps in [MaP/EXPORT_SPEC.md](../MaP/EXPORT_SPEC.md). Rojo doesn't sync it, so it lives in the
+  saved place.
 
 ## 1. Folder layout
 
@@ -87,8 +90,8 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
   comes before that floor is held and tossed then, so it isn't lost.
 - **Every tap is a hit.** No misses, no mark to stand on. A tap from outside the hit zone launches
   from the zone's nearest point. The server never reads where the player stands.
-- **Pacing.** The first tap can launch the moment the save loads. Windy Highlands (165 studs) comes
-  on hit 15, about 50s in with the 1s hold, about 40s with every hold skipped.
+- **Pacing.** The first tap can launch the moment the save loads. Windy Highlands (206 studs) comes
+  on hit 15, about 52s in with the 1s hold, about 43s with every hold skipped.
 
 ### Why the built mechanics exist (guardrail 7)
 
@@ -224,9 +227,9 @@ them.
 | `Data` | Autosave period, load timeout, how long before a failed load kicks. |
 | `Pitch` | Default pitcher, toss grace and hold, the machine's timing. |
 | `Power` | `PER_HIT` = 1, before multipliers. |
-| `Distance` | `distance = BASE + PER_POWER × power ^ EXPONENT` (20 + 10 × power today). |
-| `BiomeStarts` | Each biome's floor edge on the island map, in studs from the hit line. |
-| `World` | Lanes (5, 6 studs apart), strike height, the hit zone on the launch strip (Z −10 to 0). |
+| `Distance` | `distance = BASE + PER_POWER × power ^ EXPONENT` (25 + 12.5 × power today, scaled with the map). |
+| `BiomeStarts` | Each biome's floor edge on the island map, in studs from the hit line, at the map's 1.25x scale. |
+| `World` | Lanes (5, 7.5 studs apart), strike height, the hit zone on the launch strip (Z −12.5 to 0). |
 | `Flight` | Air time, arc height, linger time, trail, ball cap. Client visuals only. |
 | `Camera` | Ball-cam framing, slow motion, return and cut. The server times the cycle from these. |
 | `Swing` | The simple bat swing's timing. |
@@ -238,12 +241,15 @@ Where the biomes start, and the hit that first reaches each one from zero Power:
 | Biome | Starts at | First reached on hit |
 |---|---|---|
 | Meadow | 0 | 1 |
-| Windy Highlands | 165 | 15 |
-| Tundra | 365 | 35 |
-| Jungle Ruins | 615 | 60 |
-| Coral Reef | 915 | 90 |
-| Volcano | 1,290 | 127 |
-| Pyramids veil (lane end) | 1,740 | 172 |
+| Windy Highlands | 206 | 15 |
+| Tundra | 456 | 35 |
+| Jungle Ruins | 769 | 60 |
+| Coral Reef | 1,144 | 90 |
+| Volcano | 1,613 | 128 |
+| Pyramids veil (lane end) | 2,175 | 172 |
+
+The numbers in `World`, `BiomeStarts` and `Distance` must match the map. If the map's scale
+changes, they all change with it ([MaP/EXPORT_SPEC.md](../MaP/EXPORT_SPEC.md)).
 
 ## 8. Batter animations
 
@@ -303,7 +309,7 @@ upper-body track just means the full-body swing plays while walking.
 | Safe at home | No trading and nothing another player can reach. Only stats are owned so far. |
 | The map comes from Blender | WorldService builds no map geometry. It only adds the `TestPad` placeholder while `Workspace.Map` is missing. |
 | Original assets | The animations are generated in this repo. Sounds are built into the Roblox client. No MLB names or logos. |
-| Pacing | The first tap launches as soon as the save loads, from anywhere. Windy Highlands on hit 15, about 50s (section 7). Re-measure after any change to Distance, Flight, Camera, Fungo or Reveal. |
+| Pacing | The first tap launches as soon as the save loads, from anywhere. Windy Highlands on hit 15, about 52s (section 7). Re-measure after any change to Distance, Flight, Camera, Fungo or Reveal. |
 
 ## 10. Planned (not built)
 
@@ -314,10 +320,7 @@ upper-body track just means the full-body swing plays while walking.
 - **Launchers.** A stat that multiplies distance. It joins `Formulas.multiplier`.
 - **Pal training (Update 7).**
 - **Trails.** Tamed animals paint every orb you throw with their trail.
-- **The leaderboard wall.**
-- **Island map import.** `MaP/HubBlock.blend` becomes `Workspace.Map`, with a `Spawn` marker on the
-  hub overlook and the launch strip's front edge on the hit line (Z = 0, the lane down +Z). The
-  `TestPad` then disappears on its own.
+- **The leaderboard wall.** The map already has its three board faces (tagged `BoardFace`).
 
 ## 11. Parked ideas (not in the main loop)
 

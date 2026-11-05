@@ -11,7 +11,7 @@ local Biomes: { { HookTypes.BiomeConfig } } = {
 		{ id = "tundra", displayName = "Tundra" },
 		{ id = "jungle_ruins", displayName = "Jungle Ruins" },
 		{ id = "coral_reef", displayName = "Coral Reef" },
-		{ id = "volcano", displayName = "Volcano" },
+		{ id = "geyser_flats", displayName = "Geyser Flats" },
 	},
 }
 

@@ -54,7 +54,7 @@ export type LandingContext = {
 -- Handlers must not yield. LandingService.Landed fires after all handlers with the final context.
 export type LandingHandler = (ctx: LandingContext) -> FlightSegment?
 
--- What a landing caught. Nothing catches yet; the catch hook stays for the animals.
+-- What a landing caught. Nothing catches yet; the catch hook stays for the winged creatures.
 export type Catch = { [string]: any }
 
 -- CATCH PHASE of the on-land hook. Runs once, after every LandingHandler, on the final landing.

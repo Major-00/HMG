@@ -25,9 +25,9 @@ the size of the first blockout), and the six-biome lane that leaves it.
 |---|---|
 | `SkyIsland/HubSanctuary` | The Sanctuary Crater: island, ground, walks, the basin in the middle (water, an orb and six element gems), the overlook where you spawn, falls, sky windows, trees, details and the rim. |
 | `SkyIsland/HomeIsland` | The stepped underside of the floating island. |
-| `SkyIsland/BiomeLane` | The lane's six biomes (`Biome01_Meadow` … `Biome06_Volcano`, each with its own collection), then `LaneEnd_Veil` (the sandstorm veil, a statue with a countdown panel) and `LaneEnd_Beyond` (the Pyramids looming past it, with a floating gold capstone). |
+| `SkyIsland/BiomeLane` | The lane's six biomes (`Biome01_Meadow` … `Biome06_GeyserFlats`, each with its own collection). The Geyser Flats close the lane: prism terraces rising to the Crown Geyser, framed by a basalt cliff. |
 | `SkyIsland/FX_Anchors` | 19 empties, one per effect. Each has an `effect` property that says what it is (fireflies, wind petals, snowfall, mist, bubbles, lava, embers, the sandstorm). Anything that moves or floats is an effect, not a model. |
-| `SkyIsland/AnimalSpots` | 6 empties per biome (36) where animals will stand. |
+| `SkyIsland/AnimalSpots` | 6 empties per biome (36) where the winged creatures will perch. |
 | `LaunchZone` | The launch strip, 36 × 10 (x −18..18, y 35..45; 45 × 12.5 studs in the game), with its edge lines and five `OrbLaunch_1..5` empties at x −12, −6, 0, 6, 12 (one per lane, 4 up). |
 | `CaveArch` | The rock arch at the back of the hub, and `SpawnPad` on the overlook (the game's `Spawn` marker). |
 | `Stalls` | `Stall_Shop`, `LeaderboardWall` (a cliff with three boards: Luckiest Catch, Longest Launch, Next Update) and `LauncherDisplay` (four launcher spots, with preview spots facing west toward the Reveal Ring). |
@@ -35,7 +35,7 @@ the size of the first blockout), and the six-biome lane that leaves it.
 | `Perches` | 16 small pads on the rim. |
 | `Training_PENDING_DECISION` | Empty. Waiting on a decision. |
 | `Collision`, `Cameras`, `ScaleFigures` | Not exported (`export = False`): the gap and window barriers, three review cameras, 5-stud avatars for scale. |
-| `UPDATES_not_exported` | A blockout of the Galaxy grand update past the lane end. Not exported. |
+| `UPDATES_not_exported` | Not exported: the Galaxy grand update blockout, and parked since Nov 5, the old `Biome06_Volcano` and the Pyramids ending (`LaneEnd_Veil`, `LaneEnd_Beyond`). |
 
 Where each biome's floor starts on the lane. The game's `Tuning.BiomeStarts` is each edge minus 45
 (the hit line), times 1.25:
@@ -47,8 +47,9 @@ Where each biome's floor starts on the lane. The game's `Tuning.BiomeStarts` is 
 | Tundra | 410 | 456 |
 | Jungle Ruins | 660 | 769 |
 | Coral Reef | 960 | 1,144 |
-| Volcano | 1,335 | 1,613 |
-| Pyramids veil (lane end) | 1,785 | 2,175 |
+| Geyser Flats | 1,335 | 1,613 |
+| Prism terraces (the finale) | 1,790 | 2,181 |
+| Closing cliff (lane end) | 1,880 | 2,294 |
 
 Part counts for each group in the game are in [EXPORT_SPEC.md](EXPORT_SPEC.md).
 

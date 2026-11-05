@@ -20,9 +20,36 @@ and rebuild. The export data lives in `MaP/export/` (not in git; rebuild it from
 
 - **Colours:** each material's base colour converted from linear to sRGB, so Roblox shows what
   Blender's Standard view shows. 184 materials.
-- **Material:** SmoothPlastic everywhere. No studs texture for now. Neon only for real light
-  sources (lava, embers, seams, cave glow, the Pyramids' glows). No transparency anywhere except
-  the invisible collision walls.
+- **Material: two kinds of square studs, plus smooth** (approved Nov 5, from the Steal An Egg
+  reference). Two MaterialVariants in MaterialService, both Plastic, StudsPerTile 5 (4 studs at
+  1.25 scale): `LobStudsRaised` (studs pop up) and `LobStudsSunk` (studs sit in a recess with a
+  raised lip). `MaterialService:SetBaseMaterialOverride(Plastic, "LobStudsRaised")`, so plain
+  Plastic means raised.
+  - **Raised (Plastic):** floors, walls and terrain. Grass, GrassCap, Stone, Ridge, Strata, Snow,
+    Moss, Pave, ruin walls (Dark), reef rock walls, ice sheets (IceDeep, IceLight, IceMid), cave
+    walls. Geyser Flats: the runoff floor (FCrust, FGreen, FYellow, FOrange, FRust, FUmber and their
+    `_d` shades), the wall tiers (WSinter, WOchre, WSlate, Basalt and their tops, ColumnTop), the
+    rust band and pale line, Algae ledges, travertine terraces (Travertine, TravShade).
+  - **Sunk (Plastic + `LobStudsSunk`):** designed objects. Trunks, leaves, hedges, ivy, heather,
+    gorse, pines, the hub's clouds and tree pieces. Rocks are sunk as boulders, raised when 15+
+    studs long (cliffs). In the hub, everything in Hub_Details, Hub_Details2 and Hub_Trees is sunk.
+    Geyser Flats: the dead trees (Snag, SnagSock), the sinter chimneys, geyser cones and the
+    Crown Geyser (Sinter, Sinter2).
+  - **Smooth (SmoothPlastic):** water and ice falls, flowers, gems, gold, crystals, corals, kelp,
+    tentacles, starfish, cracks, icicles, the reef sand (it has to match the smooth sand mesh),
+    billboard faces (`Board_*`), and any part thinner than 1.25 studs in its middle dimension.
+    Geyser Flats: the spring rings and pools (Deep, Turq, MatGreen, MatYellow, MatOrange, Rust,
+    FTurq), TravPool, Water, mud pots (Mud, MudDark), sulfur crusts.
+  - **All meshes stay smooth.** Neon only for real light sources (the Geyser Flats' vents, the
+    eternal flame and the Crown Geyser's heart, cave glow). No transparency anywhere except the invisible collision walls.
+- **No matching faces.** Where two parts share a face plane and overlap (the hub rim and the
+  Meadow walls at the entrance, bark on trunks, walks on the basin), Studio flickers between
+  them, and with studs two stud grids shimmer. After building, the bigger part of each pair steps
+  that face back 0.06 studs so the smaller detail draws on top (attribute `FaceInset` records it).
+  Repeat until nothing is left except same-colour Neon (thin glows, which can't flicker).
+  Blender keeps the true shapes; this is a build step, not a design change.
+- **Stud textures preload** from `src/first/PreloadStuds.client.luau` (ReplicatedFirst). If the
+  stud image IDs change, change them there too.
 - **Lighting:** set in `default.project.json`, so Rojo keeps it. Realistic style, less sky fill
   light and less reflection on SmoothPlastic, exposure -0.25, and a light ColorCorrection
   (saturation +0.15, contrast +0.1) so the pastel palette doesn't wash out. No Sky, Atmosphere,
@@ -32,6 +59,14 @@ and rebuild. The export data lives in `MaP/export/` (not in git; rebuild it from
 
 Built under `Workspace.Map`: `Hub` (one Persistent model) and `Lane` (one model per biome, Atomic,
 LevelOfDetail = StreamingMesh). 12291 parts in all. Bounds are Roblox studs.
+Streaming: target radius 1,024 around the player, StreamOutBehavior LowMemory (biomes stay loaded
+unless the device runs short of memory). The lane runs to about 2,294, so `StreamController` asks
+for the landing area the moment a flight starts.
+
+**These counts are from the first 1.25x export (Nov 5 morning).** Since then the detail ladder
+(below) lightened biomes 2 to 5 in Blender, and the Geyser Flats replaced the Volcano and the
+Pyramids ending. Re-measure at the next export. Blender pieces after the ladder: Meadow 530,
+Windy Highlands 1,170, Tundra 1,266, Jungle Ruins 1,489, Coral Reef 1,636, Geyser Flats 2,819.
 
 | Group | Parts | Bounds (min to max) |
 |---|---|---|
@@ -58,12 +93,11 @@ LevelOfDetail = StreamingMesh). 12291 parts in all. Bounds are Roblox studs.
 | `Lane/Biome03_Tundra` | 2076 | (-76.135, -3.48, 456.25) to (77.696, 68.75, 768.75) |
 | `Lane/Biome04_JungleRuins` | 1879 | (-88.455, -2.5, 768.75) to (88.43, 65.364, 1143.75) |
 | `Lane/Biome05_CoralReef` | 866 | (-97.5, -1.25, 1143.75) to (97.5, 52.5, 1612.5) |
-| `Lane/Biome06_Volcano` | 2817 | (-343.75, -3.088, 1612.5) to (112.641, 192.5, 2180.287) |
-| `Lane/LaneEnd_Beyond` | 61 | (-256.25, -0.0, 2343.75) to (231.25, 256.25, 2656.25) |
-| `Lane/LaneEnd_Veil` | 441 | (-110.0, -4.375, 2098.213) to (110.0, 48.75, 2262.5) |
+| `Lane/Biome06_GeyserFlats` | not exported yet | (-137.5, -1.25, 1612.5) to (137.5, ~90, 2306) |
 
-Plus 94 mesh pieces in three files under `MaP/export/meshes/` (Reef 64,
-Volcano 21, island underside 9), each under 1,600 triangles.
+Plus mesh pieces under `MaP/export/meshes/` (Reef 64 and island underside 9; the Volcano's 21
+left with it), each under 1,600 triangles. The Reef file must be re-exported: the ladder pass
+removed pieces nobody sees from inside its meshes.
 
 ## Collision
 
@@ -86,12 +120,27 @@ Invisible 1-stud parts under `Workspace.Map.Markers`, tagged with CollectionServ
 - `World.HIT_ZONE = { back = -12.5, front = 0 }`: the launch strip, 45 wide and 12.5 deep.
 - `World.LANE_SPACING = 7.5` with `LANE_COUNT = 5`.
 - `BiomeStarts = { 0, 206, 456, 769, 1144, 1613 }`: each biome's floor edge from the hit line.
-  The lane ends at the Pyramids veil, 2,175 studs out.
+  The lane ends at the Geyser Flats' closing cliff, about 2,294 studs out (reached on hit 182).
 - `Distance = { BASE = 25, PER_POWER = 12.5 }`: scaled too, so Windy Highlands still comes on hit 15.
 - `World.STRIKE_HEIGHT = 3` stays: it's relative to the avatar, which isn't scaled.
 - Spawn comes from the `Spawn` marker (`WorldService`), so it follows the map on its own.
 
 If the scale ever changes, all of these change with it.
+
+## The detail ladder (Nov 5)
+
+Biomes start minimal and get richer step by step, the way Steal An Egg's lane does. The first
+biomes are always loaded and every throw flies over them, so they carry the least.
+
+- Bigger detail, not more detail: one chunky tuft reads better from the orb than six blades.
+- Nothing is built where the camera never looks: no backs, no undersides, no buried pieces.
+  `MaP/tools/ladder.py` holds the tools (visibility from 405 orb, catch and hub cameras;
+  clumping; joining near-identical wall segments).
+- Every biome keeps its coloured top edge; walls still grow wider and taller each biome, because
+  a part's size costs nothing.
+- Each step adds one layer: Meadow (floor, walls, edge, one landmark), Windy Highlands (layered
+  walls), Tundra (a wall rhythm and a second landmark), Jungle Ruins (skyline and water), Coral
+  Reef (the colour show), Geyser Flats (everything, plus effects).
 
 ## Rebuilding
 
@@ -103,4 +152,5 @@ across the Orb Walk. Hide the objects instead (the Collision objects are hidden 
 2. In Studio, delete `Workspace.Map` and build it from `MaP/export/` (parts in chunks of 600).
 3. Import the three FBX files with Import 3D, then run the mesh placement (by piece name, from
    `manifest.json`).
-4. Check: part counts match the table above, the spawn is on the emblem, and a play test hits.
+4. Apply the stud classes above, then the matching-faces step.
+5. Check: part counts match the table above, the spawn is on the emblem, and a play test hits.

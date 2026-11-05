@@ -9,7 +9,7 @@ is under **Planned** at the end. Guardrails and hard rules: [CLAUDE.md](../CLAUD
 - **Server owns every number.** The client sends ids only, never values.
 - **Saves use ProfileStore.**
 - **One world.** The island's one straight lane leaves the hub through six biomes and ends at the
-  Pyramids' sandstorm veil.
+  Geyser Flats' prism terraces and the Crown Geyser.
 - **The map.** `Workspace.Map` is built in Studio from `MaP/HubBlock.blend` at 1.25x scale, by the
   steps in [MaP/EXPORT_SPEC.md](../MaP/EXPORT_SPEC.md). Rojo doesn't sync it, so it lives in the
   saved place.
@@ -152,7 +152,7 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
 | BatPose | Where the placeholder bat sits in the hand. Shared by WorldService and BatSwing. |
 | HitZone | The hit zone on the launch strip: `halfWidth()`, `contains(pos)`, `clamp(pos)`, `lineOrigin(x)`. |
 | Config/Tuning | **Every tunable number** (section 7). |
-| Config/Biomes | The six biomes in flight order: Meadow, Windy Highlands, Tundra, Jungle Ruins, Coral Reef, Volcano. |
+| Config/Biomes | The six biomes in flight order: Meadow, Windy Highlands, Tundra, Jungle Ruins, Coral Reef, Geyser Flats. |
 
 ## 4. Client ↔ server (remotes)
 
@@ -245,8 +245,9 @@ Where the biomes start, and the hit that first reaches each one from zero Power:
 | Tundra | 456 | 35 |
 | Jungle Ruins | 769 | 60 |
 | Coral Reef | 1,144 | 90 |
-| Volcano | 1,613 | 128 |
-| Pyramids veil (lane end) | 2,175 | 172 |
+| Geyser Flats | 1,613 | 128 |
+| Prism terraces (the finale) | 2,181 | 173 |
+| Closing cliff (lane end) | 2,294 | 182 |
 
 The numbers in `World`, `BiomeStarts` and `Distance` must match the map. If the map's scale
 changes, they all change with it ([MaP/EXPORT_SPEC.md](../MaP/EXPORT_SPEC.md)).
@@ -313,13 +314,13 @@ upper-body track just means the full-body swing plays while walking.
 
 ## 10. Planned (not built)
 
-- **Catching animals in orbs.** A lucky throw catches an animal where the orb lands, through the
+- **Catching winged creatures in orbs.** A lucky throw catches a winged creature where the orb lands, through the
   catch phase (`LandingService.SetCatcher`). The orb flies back shaking.
 - **The Reveal Ring.** The caught orb is cracked open there, in the hub. The longer landing hold
   (`Reveal.FULL`) is waiting for it.
 - **Launchers.** A stat that multiplies distance. It joins `Formulas.multiplier`.
 - **Pal training (Update 7).**
-- **Trails.** Tamed animals paint every orb you throw with their trail.
+- **Trails.** Tamed creatures paint every orb you throw with their trail.
 - **The leaderboard wall.** The map already has its three board faces (tagged `BoardFace`).
 
 ## 11. Parked ideas (not in the main loop)

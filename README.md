@@ -5,8 +5,9 @@
 A Roblox incremental game on a floating sky island. One tap launches an orb, and every tap hits.
 Distance comes only from stats (Power, launchers, boosts), never from timing or aim. The orb flies
 from the Sanctuary Crater down one straight lane through six biomes: Meadow, Windy Highlands,
-Tundra, Jungle Ruins, Coral Reef and Volcano. A lucky throw catches an animal where the orb lands,
-and tamed animals ride with you, boost your launches and paint your orbs with their trail. Today
+Tundra, Jungle Ruins, Coral Reef and Geyser Flats. A lucky throw catches a winged creature where
+the orb lands, and tamed creatures ride with you, boost your launches and paint your orbs with their
+trail. Today
 only the core loop is built: tap, launch, flight, ball-cam and saved Power.
 
 ## Setup

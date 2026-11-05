@@ -1,0 +1,10 @@
+# Blender's own save backups and regenerable review renders
+*.blend1
+renders/
+__pycache__/
+# Only the map itself (HubBlock.blend, through Git LFS) is tracked. Backups, work in progress
+# and earlier maps stay local.
+*.blend
+!HubBlock.blend
+# Outside mood reference images: not ours to publish, and the repo is public.
+refs/

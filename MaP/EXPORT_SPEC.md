@@ -58,15 +58,15 @@ and rebuild. The export data lives in `MaP/export/` (not in git; rebuild it from
 ## Groups
 
 Built under `Workspace.Map`: `Hub` (one Persistent model) and `Lane` (one model per biome, Atomic,
-LevelOfDetail = StreamingMesh). 12291 parts in all. Bounds are Roblox studs.
+LevelOfDetail = StreamingMesh). 9,512 parts in all since the Nov 5 evening rebuild (12,291 before
+the ladder), plus the Reef's mesh pieces. Bounds are Roblox studs.
 Streaming: target radius 1,024 around the player, StreamOutBehavior LowMemory (biomes stay loaded
 unless the device runs short of memory). The lane runs to about 2,294, so `StreamController` asks
 for the landing area the moment a flight starts.
 
-**These counts are from the first 1.25x export (Nov 5 morning).** Since then the detail ladder
-(below) lightened biomes 2 to 5 in Blender, and the Geyser Flats replaced the Volcano and the
-Pyramids ending. Re-measure at the next export. Blender pieces after the ladder: Meadow 530,
-Windy Highlands 1,170, Tundra 1,266, Jungle Ruins 1,489, Coral Reef 1,636, Geyser Flats 2,819.
+The hub rows are from the first 1.25x export (Nov 5 morning); the lane rows are from the rebuild
+after the detail ladder (Nov 5 evening), when the Geyser Flats replaced the Volcano and the Pyramids
+ending.
 
 | Group | Parts | Bounds (min to max) |
 |---|---|---|
@@ -89,15 +89,15 @@ Windy Highlands 1,170, Tundra 1,266, Jungle Ruins 1,489, Coral Reef 1,636, Geyse
 | `Hub/Perches` | 16 | (-163.125, 7.5, -235.625) to (126.875, 38.75, 25.625) |
 | `Hub/Stalls` | 88 | (-98.75, 0.0, -61.25) to (-46.25, 51.25, -13.0) |
 | `Lane/Biome01_Meadow` | 516 | (-51.047, -2.5, 18.75) to (51.047, 53.75, 206.25) |
-| `Lane/Biome02_WindyHighlands` | 1917 | (-89.6, -2.5, 206.25) to (90.024, 63.672, 477.332) |
-| `Lane/Biome03_Tundra` | 2076 | (-76.135, -3.48, 456.25) to (77.696, 68.75, 768.75) |
-| `Lane/Biome04_JungleRuins` | 1879 | (-88.455, -2.5, 768.75) to (88.43, 65.364, 1143.75) |
-| `Lane/Biome05_CoralReef` | 866 | (-97.5, -1.25, 1143.75) to (97.5, 52.5, 1612.5) |
-| `Lane/Biome06_GeyserFlats` | not exported yet | (-137.5, -1.25, 1612.5) to (137.5, ~90, 2306) |
+| `Lane/Biome02_WindyHighlands` | 1170 | (-89.6, -2.5, 206.2) to (88.9, 63.7, 477.3) |
+| `Lane/Biome03_Tundra` | 1266 | (-74.3, -4.8, 456.2) to (75.5, 68.8, 768.8) |
+| `Lane/Biome04_JungleRuins` | 1489 | (-88.5, -2.5, 768.8) to (88.4, 65.4, 1143.8) |
+| `Lane/Biome05_CoralReef` | 525 + 66 meshes | (-97.5, 0.0, 1143.8) to (97.5, 40.4, 1612.5), parts only |
+| `Lane/Biome06_GeyserFlats` | 2819 | (-140.0, -1.2, 1612.5) to (137.5, 94.6, 2322.3) |
 
-Plus mesh pieces under `MaP/export/meshes/` (Reef 64 and island underside 9; the Volcano's 21
-left with it), each under 1,600 triangles. The Reef file must be re-exported: the ladder pass
-removed pieces nobody sees from inside its meshes.
+Plus mesh pieces under `MaP/export/meshes/`: the Reef's 66 (`Import_Biome05_CoralReef.fbx`,
+27,800 triangles, re-exported after the ladder) and the island underside's 9, each under 1,600
+triangles. The Reef's sand floor is a plain part since the ladder.
 
 ## Collision
 
@@ -148,9 +148,29 @@ biomes are always loaded and every throw flies over them, so they carry the leas
 viewport-hidden collection, so the export reads stale ones. On Nov 5 that put the lane-gap barrier
 across the Orb Walk. Hide the objects instead (the Collision objects are hidden one by one).
 
-1. In Blender, run the export (classify, merge, write `MaP/export/`).
-2. In Studio, delete `Workspace.Map` and build it from `MaP/export/` (parts in chunks of 600).
-3. Import the three FBX files with Import 3D, then run the mesh placement (by piece name, from
-   `manifest.json`).
-4. Apply the stud classes above, then the matching-faces step.
-5. Check: part counts match the table above, the spawn is on the emblem, and a play test hits.
+The lane has its own tools in `MaP/tools/` (the hub rebuild still follows the first export):
+
+1. **Export (Blender).** `export_lane.py`: `ns = {}; exec(open(".../MaP/tools/export_lane.py").read(), ns); ns["run"]([...biomes])`.
+   Every mesh island that is a box (or a flat plane, given 0.0625 studs; or an eight-corner tapered
+   segment, given the box of its average edges) becomes a part, boxes of
+   one material that share a whole face are joined, and the rest (the Reef's coral) goes to
+   `meshes/Import_<biome>.fbx` in 75-stud chunks. Writes `parts/Lane__<biome>.json`,
+   `lane_materials.json`, `lane_meshes.json` and `lane_markers.json`. Part names drop Blender's
+   `B_` prefix; the Geyser study's `Fb_` becomes `Gf_`.
+2. **Prepare.** `python3 MaP/tools/prepare_build.py src/server/_MapBuild <biomes> --fixed <biomes already in Studio>`
+   applies the matching-faces step (each face steps back 0.06 studs at most twice) and splits the
+   parts into JSON files. `src/server/_MapBuild/` is in `.git/info/exclude`, so it never reaches
+   git, but a running `rojo serve` syncs it into Studio, which is how the data gets there.
+3. **Build (Studio).** Each biome model is rebuilt from those files (Atomic, StreamingMesh). The
+   stud class and collision per material come from `MaP/tools/lane_classes.json`: thin parts
+   (middle size under 1.25) are smooth, rocks are sunk below 15 studs long, collision tags
+   `PlaytestWalk`, parts under 3 studs cast no shadow. Then the markers (`AnimalSpot`, `FXAnchor`).
+4. **Meshes.** Import the FBX with Import 3D (only the lane file: the island underside's old FBX
+   comes in seven times too big, and the hub already has it), then place each piece by name from
+   `lane_meshes.json`: Size from the record, CFrame at the record's position **turned 180° about Y**
+   (`CFrame.new(pos) * CFrame.Angles(0, math.pi, 0)`). Import 3D turns every piece that way, and
+   the size check can't see it because a half turn keeps the size. Records are measured from
+   vertices that belong to a face, since Studio drops loose ones. Meshes are SmoothPlastic,
+   CollisionFidelity Box, no collision or queries, shadow from 3 studs.
+5. **Clean up and check.** Delete `src/server/_MapBuild/`. Part counts match the table above, the
+   spawn is on the emblem, and a play test hits.

@@ -31,7 +31,7 @@ only the core loop is built: tap, launch, flight, ball-cam and saved Power.
    ```
 
 4. Open the place in Studio, open the Rojo plugin and click **Connect**. Rojo syncs `src/`,
-   `assets/` and the `Workspace` and `Lighting` properties from `default.project.json`.
+   `assets/` and the `Workspace` and `Lighting` settings from `default.project.json`.
 
 Before committing, check style and lint:
 

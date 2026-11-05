@@ -20,7 +20,7 @@ is under **Planned** at the end. Guardrails and hard rules: [CLAUDE.md](../CLAUD
 HMG/
 ├─ CLAUDE.md               design guardrails and hard rules
 ├─ README.md               setup and repo layout
-├─ default.project.json    Rojo: maps src/ and assets/ into the place, plus Workspace and Lighting properties
+├─ default.project.json    Rojo: maps src/ and assets/ into the place, plus Workspace and Lighting settings
 ├─ rokit.toml              pinned tools: rojo 7.7.1, selene 0.32.0, stylua 2.6.0
 ├─ selene.toml, stylua.toml
 ├─ docs/ARCHITECTURE.md

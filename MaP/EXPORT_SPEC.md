@@ -23,7 +23,10 @@ and rebuild. The export data lives in `MaP/export/` (not in git; rebuild it from
 - **Material:** SmoothPlastic everywhere. No studs texture for now. Neon only for real light
   sources (lava, embers, seams, cave glow, the Pyramids' glows). No transparency anywhere except
   the invisible collision walls.
-- **Lighting:** a fresh Baseplate's defaults. Old Atmosphere and Bloom wash colours out.
+- **Lighting:** set in `default.project.json`, so Rojo keeps it. Realistic style, less sky fill
+  light and less reflection on SmoothPlastic, exposure -0.25, and a light ColorCorrection
+  (saturation +0.15, contrast +0.1) so the pastel palette doesn't wash out. No Sky, Atmosphere,
+  SunRays or Bloom: they wash colours out.
 
 ## Groups
 

@@ -6,7 +6,7 @@
 
 local Migrations = {}
 
-Migrations.CURRENT_VERSION = 3
+Migrations.CURRENT_VERSION = 4
 
 -- Steps[n] upgrades a version-n save to version n + 1, editing it in place.
 local Steps: { [number]: (data: any) -> () } = {
@@ -24,6 +24,23 @@ local Steps: { [number]: (data: any) -> () } = {
 		if data.pitcher == "pitching_machine" then
 			data.pitcher = "fungo"
 		end
+	end,
+	-- v3 -> v4: Lob an Orb! keeps only the hit: the old game's Cash, bats, balls, park, Mascots,
+	-- Index, stadium tiers and their settings are removed. Reconcile never removes keys, so
+	-- they go here. Only test saves exist.
+	[3] = function(data)
+		for _, key in { "cash", "bats", "balls", "park", "mascots", "nextMascotUid", "seats", "hotbar", "onDeck", "autoSell", "index", "stadiumTier" } do
+			data[key] = nil
+		end
+		if type(data.settings) == "table" then
+			data.settings.tipsSeen = nil
+			data.settings.indexSeen = nil
+		end
+		if type(data.lifetime) == "table" then
+			data.lifetime.cashEarned = nil
+			data.lifetime.mascotsCaught = nil
+		end
+		data.highestBiome = 1 -- the biomes changed
 	end,
 }
 

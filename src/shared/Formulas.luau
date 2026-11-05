@@ -1,50 +1,18 @@
 --!strict
 -- Formulas: pure math for the core loop. Every number comes from Config/Tuning.
--- The server uses these to decide stats; the client only uses them for display.
+-- The server uses these to decide stats; the client only uses them to draw the hit at once.
 
 local Config = script.Parent.Config
 local HookTypes = require(script.Parent.HookTypes)
 local Tuning = require(Config.Tuning)
-local Balls = require(Config.Balls)
 local Biomes = require(Config.Biomes)
-local Bats = require(Config.Bats)
-local Mascots = require(Config.Mascots)
-local Park = require(Config.Park)
-local Stadium = require(Config.Stadium)
 
 local Formulas = {}
 
--- The player's stadium tier entry (tier 1 if the save holds an unknown tier).
-function Formulas.stadiumTier(data: any): Stadium.StadiumTier
-	return Stadium[data.stadiumTier] or Stadium[1]
-end
-
-export type PromotionStatus = {
-	next: Stadium.StadiumTier?, -- nil at the top tier
-	cashOk: boolean,
-	biomeOk: boolean,
-	ready: boolean,
-}
-
--- Whether the player can promote to the next stadium tier, and which requirement is missing.
--- The server enforces this; the promotion panel shows the same thing.
-function Formulas.promotionStatus(data: any): PromotionStatus
-	local nextTier = Stadium[(data.stadiumTier or 1) + 1]
-	local requires = nextTier and nextTier.requires
-	if nextTier == nil or requires == nil then
-		return { next = nil, cashOk = false, biomeOk = false, ready = false }
-	end
-	local cashOk = data.cash >= requires.cash
-	local biomeOk = data.highestBiome >= requires.biome
-	return { next = nextTier, cashOk = cashOk, biomeOk = biomeOk, ready = cashOk and biomeOk }
-end
-
--- A player's total Power multiplier from their save: bat x stadium tier x pitcher bonus.
--- Shared so the client can predict a hit exactly (boosts join the product when they exist).
-function Formulas.multiplier(data: any, pitcherBonus: number): number
-	local bat = Bats.ById[data.bats.equipped]
-	local batMultiplier = if bat then bat.powerMultiplier else 1
-	return batMultiplier * Formulas.stadiumTier(data).powerMultiplier * pitcherBonus
+-- A player's total Power multiplier. For now only the pitcher's bonus; launchers and boosts join
+-- the product when they exist. Shared so the client can predict a hit exactly.
+function Formulas.multiplier(_data: any, pitcherBonus: number): number
+	return pitcherBonus
 end
 
 -- Power gained from one hit, given the player's total multiplier.
@@ -58,29 +26,9 @@ function Formulas.distance(power: number): number
 	return math.floor(d.BASE + d.PER_POWER * math.max(power, 0) ^ d.EXPONENT)
 end
 
--- The highest record milestone passed when the best distance goes from `previousBest` to
--- `newBest`, or nil if none was passed.
-function Formulas.recordMilestone(previousBest: number, newBest: number): number?
-	local list = Tuning.Highlight.RECORD_MILESTONES
-	local passed: number? = nil
-	local milestone = list[1]
-	local i = 1
-	while milestone <= newBest do
-		if milestone > previousBest then
-			passed = milestone
-		end
-		i += 1
-		-- Past the list, keep the 1 - 2.5 - 5 - 10 pattern (x2.5, x2, x2).
-		local ratio = ({ 2.5, 2, 2 })[(i - #list - 1) % 3 + 1]
-		milestone = list[i] or milestone * ratio
-	end
-	return passed
-end
-
--- The world a save plays: its stadium tier, capped at the last world that exists. There's no
--- way back to an earlier world (the tier only goes up).
-function Formulas.world(data: any): number
-	return math.clamp(math.floor(data.stadiumTier or 1), 1, #Biomes)
+-- The world a save plays. There is one world: the island's lane.
+function Formulas.world(_data: any): number
+	return 1
 end
 
 -- The biome list for `world` (default 1; past the last world, the last one).
@@ -98,6 +46,10 @@ function Formulas.biomeIndexAt(distance: number, world: number?): number
 		end
 	end
 	return index
+end
+
+function Formulas.biomeNameAt(distance: number, world: number?): string
+	return Formulas.biomes(world)[Formulas.biomeIndexAt(distance, world)].displayName
 end
 
 -- The Fungo swing tier for a Power total (Tuning.Fungo.TIERS): the last tier whose minPower it
@@ -126,250 +78,24 @@ function Formulas.slowedAirTime(distance: number): number
 	return base + base * c.SLOWMO_PORTION * (1 / c.SLOWMO_SPEED - 1)
 end
 
--- Seconds the catch reveal holds the camera on the landing: FULL for a new species of
--- Reveal.FULL_FROM_RARITY or rarer, SHORT otherwise (and when there's no catch).
--- `catch` is a HookTypes.Catch (only rarity and isNewSpecies are read).
-function Formulas.revealTime(catch: any?): number
-	local r = Tuning.Reveal
-	if catch and catch.isNewSpecies then
-		local rank = Mascots.RarityRank[catch.rarity] or 1
-		if rank >= (Mascots.RarityRank[r.FULL_FROM_RARITY] or math.huge) then
-			return r.FULL
-		end
-	end
-	return r.SHORT
+-- Seconds the camera holds on the landing. Nothing is caught yet, so it's always the short hold;
+-- `catch` is kept so a future catch can ask for the full one (Reveal.FULL).
+function Formulas.revealTime(_catch: any?): number
+	return Tuning.Reveal.SHORT
 end
 
--- Seconds the camera takes to come back to the batter after the reveal: a swoop, or a fade cut
+-- Seconds the camera takes to come back to the batter after the hold: a swoop, or a fade cut
 -- for long hits.
 function Formulas.returnTime(distance: number): number
 	local c = Tuning.Camera
 	return if distance > c.CUT_BEYOND then c.CUT_TIME else c.RETURN_TIME
 end
 
--- Seconds from contact until the ball-cam is back on the batter, with a reveal of `reveal`
--- seconds at the landing (default Reveal.SHORT). The server uses this to time the next pitch,
--- so it must match the client's camera.
+-- Seconds from contact until the ball-cam is back on the batter, with a hold of `reveal` seconds
+-- at the landing (default Reveal.SHORT). The server uses this to time the next pitch, so it must
+-- match the client's camera.
 function Formulas.ballCamTime(distance: number, reveal: number?): number
 	return Formulas.slowedAirTime(distance) + (reveal or Tuning.Reveal.SHORT) + Formulas.returnTime(distance)
-end
-
-function Formulas.biomeNameAt(distance: number, world: number?): string
-	return Formulas.biomes(world)[Formulas.biomeIndexAt(distance, world)].displayName
-end
-
--- MASCOT CATCH -------------------------------------------------------------------------------
-
--- The next ball tier to buy: the first one in Config/Balls order the save doesn't own (balls
--- are bought in order), or nil when every tier is owned.
-function Formulas.nextBall(data: any): Balls.Ball?
-	for _, ball in Balls do
-		if not data.balls.owned[ball.id] then
-			return ball
-		end
-	end
-	return nil
-end
-
--- Each rarity's total chance (0..1) from catchOdds, for showing a ball's odds.
-function Formulas.rarityOdds(
-	world: number,
-	ballId: string,
-	biomeIndex: number,
-	distance: number,
-	luckMult: number?
-): { [string]: number }
-	local out = {}
-	for _, entry in Formulas.catchOdds(world, ballId, biomeIndex, distance, luckMult) do
-		out[entry.rarity] = (out[entry.rarity] or 0) + entry.chance
-	end
-	return out
-end
-
--- The best ball the save owns (the last one in Config/Balls order).
-function Formulas.bestBall(data: any): Balls.Ball
-	local best = Balls[1]
-	for _, ball in Balls do
-		if data.balls.owned[ball.id] then
-			best = ball
-		end
-	end
-	return best
-end
-
--- Luck at a landing distance, times any boost (`luckMult`, default 1).
-function Formulas.luck(distance: number, luckMult: number?): number
-	local l = Tuning.Catch.LUCK
-	local base = 1 + l.PER_DOUBLING * math.log(1 + math.max(distance, 0) / l.BASE_STUDS, 2)
-	return math.min(l.MAX_LUCK, base) * (luckMult or 1)
-end
-
-export type SpeciesOdds = {
-	species: string,
-	rarity: string,
-	chance: number, -- 0..1; all entries add up to 1
-}
-
--- Every species' chance of being caught at a landing. The server rolls from this list and every
--- odds screen shows it, so they can never disagree.
---   world, ballId: the player's world and best ball
---   biomeIndex: the biome the ball landed in; distance: where it landed (drives Luck)
---   luckMult: any luck boost (default 1)
--- Each rarity's weight is the ball's weight x luck ^ ((rank - 1) x LUCK_POWER), split evenly
--- between the species of that rarity in the biome. Rarities with no species there drop out.
-function Formulas.catchOdds(
-	world: number,
-	ballId: string,
-	biomeIndex: number,
-	distance: number,
-	luckMult: number?
-): { SpeciesOdds }
-	local ball = Balls[1]
-	for _, b in Balls do
-		if b.id == ballId then
-			ball = b
-		end
-	end
-	local biome = Formulas.biomes(world)[biomeIndex]
-	local worldMascots = Mascots.Worlds[math.clamp(world, 1, #Mascots.Worlds)]
-	local list = if biome then worldMascots[biome.id] else nil
-	if list == nil or #list == 0 then
-		return {}
-	end
-
-	local byRarity: { [string]: { string } } = {}
-	for _, species in list do
-		byRarity[species.rarity] = byRarity[species.rarity] or {}
-		table.insert(byRarity[species.rarity], species.id)
-	end
-
-	local luck = Formulas.luck(distance, luckMult)
-	local odds: { SpeciesOdds } = {}
-	local total = 0
-	for rank, rarity in Mascots.Rarities do
-		local ids = byRarity[rarity.id]
-		local weight = ball.weights[rarity.id] or 0
-		if ids and weight > 0 then
-			local rarityWeight = weight * luck ^ ((rank - 1) * Tuning.Catch.LUCK_POWER)
-			for _, id in ids do
-				local each = rarityWeight / #ids
-				table.insert(odds, { species = id, rarity = rarity.id, chance = each })
-				total += each
-			end
-		end
-	end
-	for _, entry in odds do
-		entry.chance /= total
-	end
-	return odds
-end
-
--- Picks a species from catchOdds using the server's Random.
-function Formulas.rollSpecies(odds: { SpeciesOdds }, rng: Random): string?
-	local roll = rng:NextNumber()
-	local sum = 0
-	for _, entry in odds do
-		sum += entry.chance
-		if roll < sum then
-			return entry.species
-		end
-	end
-	local last = odds[#odds]
-	return if last then last.species else nil -- float rounding at the very top
-end
-
--- Rolls one id from a list of { id, chance }; whatever chance is left goes to `default`.
-local function rollExtra(list: { any }, default: string, rng: Random): string
-	local roll = rng:NextNumber()
-	local sum = 0
-	for _, entry in list do
-		sum += entry.chance
-		if roll < sum then
-			return entry.id
-		end
-	end
-	return default
-end
-
-function Formulas.rollVariant(rng: Random): string
-	return rollExtra(Tuning.Catch.VARIANTS, "none", rng)
-end
-
-function Formulas.rollSize(rng: Random): string
-	return rollExtra(Tuning.Catch.SIZES, "normal", rng)
-end
-
-local function multiplierOf(list: { any }, id: string): number
-	for _, entry in list do
-		if entry.id == id then
-			return entry.multiplier
-		end
-	end
-	return 1
-end
-
--- Cash per second a Mascot earns while seated, before park upgrades and the stadium tier.
--- Its world counts (WORLD_CASH), not the world the player is in now.
--- `mascot` is a saved MascotEntry ({ species, variant, size, ... }); 0 for an unknown species.
-function Formulas.mascotCashPerSec(mascot: any): number
-	local species = Mascots.ById[mascot.species]
-	if species == nil then
-		return 0
-	end
-	local c = Tuning.Catch
-	local base = (c.RARITY_CASH[species.rarity] or 0)
-		* (c.BIOME_CASH[species.biomeIndex] or 1)
-		* (c.WORLD_CASH[species.world] or 1)
-	return base * multiplierOf(c.VARIANTS, mascot.variant) * multiplierOf(c.SIZES, mascot.size)
-end
-
--- Cash paid when a Mascot is sold (by tap, Auto-Sell or the On Deck rule): always this full value.
-function Formulas.mascotSellValue(mascot: any): number
-	return math.floor(Formulas.mascotCashPerSec(mascot) * Tuning.Catch.SELL_SECONDS)
-end
-
--- INCOME ------------------------------------------------------------------------------------
-
--- The park's Cash multiplier from its upgrades: 1 + each upgrade's level x its bonus per level.
-function Formulas.parkMultiplier(data: any): number
-	local multiplier = 1
-	for _, upgrade in Park.Upgrades do
-		local level = math.clamp(data.park[upgrade.id] or 0, 0, Park.MAX_LEVEL)
-		multiplier += level * upgrade.bonusPerLevel
-	end
-	return multiplier
-end
-
--- Cash for the next level of a park upgrade when it's at `level`, or nil at the max level.
-function Formulas.parkUpgradeCost(upgradeId: string, level: number): number?
-	local upgrade = Park.UpgradeById[upgradeId]
-	if upgrade == nil or level >= Park.MAX_LEVEL then
-		return nil
-	end
-	return math.floor(upgrade.baseCost * upgrade.costGrowth ^ level)
-end
-
--- Cash per second the player earns: seated Mascots only (hotbar and On Deck don't earn),
--- times the park upgrades and the stadium tier's Cash multiplier. The server pays this; the
--- client uses the same number to count the HUD up smoothly.
-function Formulas.cashRate(data: any): number
-	local seated = 0
-	for _, uid in data.seats do
-		local mascot = if uid then data.mascots[uid] else nil
-		if mascot then
-			seated += Formulas.mascotCashPerSec(mascot)
-		end
-	end
-	return seated * Formulas.parkMultiplier(data) * Formulas.stadiumTier(data).cashMultiplier
-end
-
--- Seconds of offline time that pay out: time since the save was last written, never negative
--- (a clock that went backwards pays nothing), capped at Tuning.Offline.CAP_SECONDS.
-function Formulas.offlineSeconds(lastOnline: number, now: number): number
-	if lastOnline <= 0 or now <= lastOnline then
-		return 0
-	end
-	return math.min(now - lastOnline, Tuning.Offline.CAP_SECONDS)
 end
 
 return Formulas

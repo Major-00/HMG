@@ -1,13 +1,10 @@
 {
-  "name": "HomeRunMascots",
+  "name": "LobAnOrb",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
-      },
-      "Landmarks": {
-        "$path": "assets/Landmarks"
       },
       "Animations": {
         "$path": "assets/Animations"

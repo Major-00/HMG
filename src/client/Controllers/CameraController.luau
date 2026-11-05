@@ -53,7 +53,7 @@ type Cam = {
 
 local CameraController = {}
 
--- The catch reveal, for CatchRevealController (it draws the Mascot; this only times it):
+-- The landing hold (it only times it; a future catch view can listen):
 --   RevealStarted (hitId, landing: Vector3, seconds, catch) when the camera starts holding
 --   RevealEnded   (hitId, skipped: boolean) when it stops, however it stops
 CameraController.RevealStarted = Signal.new()
@@ -299,7 +299,7 @@ local function step(dt: number)
 		local shot = if revealCamera then revealCamera(state.hitId, elapsed) else nil
 		if shot and not state.cutIn then
 			state.cutIn = true
-			current.CFrame = shot -- cut straight to the Mascot's view
+			current.CFrame = shot -- cut straight to the hold's view
 		else
 			current.CFrame = current.CFrame:Lerp(shot or chaseCFrame(landing, 3), smoothing(dt))
 		end

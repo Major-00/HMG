@@ -14,7 +14,7 @@
 --   HitResult (remote)         -> the server's real flight. If it differs from the prediction (a new
 --                                 multiplier, an on-land handler) the flight re-plans to it mid-air.
 -- Flights are arcs with a short trail; the end of the final descent plays in slow motion for the ball-cam.
--- Events for the camera and highlights:
+-- Events for the camera:
 --   BallController.Launched      -> Signal (hitId, info) when a hit's flight starts;
 --                                   info = { distance, landing: Vector3, airTime }
 --   BallController.Touchdown     -> Signal (hitId, segmentIndex, position, distance, isFinal) at each landing
@@ -145,7 +145,7 @@ local function acquire(): Ball?
 		if oldest == nil then
 			return nil
 		end
-		-- Still owe its landing to listeners (camera, highlights).
+		-- Still owe its landing to listeners (the camera).
 		checkTouchdowns(oldest, math.huge)
 		checkWatches(oldest, math.huge, true)
 		release(oldest.ball)
@@ -346,7 +346,7 @@ function BallController.GetBallPosition(hitId: number): Vector3?
 	return if flight then flight.ball.part.Position else nil
 end
 
--- Hides a landed hit's ball (the catch reveal's Mascot is holding its own copy). Visual only.
+-- Hides a landed hit's ball (for a future catch view holding its own copy). Visual only.
 function BallController.HideBall(hitId: number)
 	local flight = findFlight(hitId)
 	if flight then

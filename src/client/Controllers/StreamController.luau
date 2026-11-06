@@ -1,10 +1,11 @@
 --!strict
--- Keeps the map loaded where the ball is going.
+-- Keeps the area where the ball is going loaded.
 --
--- The lane streams in around the player's character (StreamingTargetRadius 1,024), but a hit can
--- fly about 2,294 studs and the camera follows it. The moment a flight starts, this asks the engine to
--- stream in the area around where it will land, so the biome there is in full detail by the time
--- the camera arrives instead of filling in on screen.
+-- Every lane biome is Persistent (MaP/EXPORT_SPEC.md), so the map itself is always there. Anything
+-- else streams in around the player's character (StreamingTargetRadius 1,024), but a hit can fly
+-- about 2,294 studs and the camera follows it. The moment a flight starts, this asks the engine to
+-- stream in the area around where it will land, so whatever is there has loaded by the time the
+-- camera arrives instead of filling in on screen.
 --
 -- It only listens to BallController.Launched; it never changes the flight or the camera.
 

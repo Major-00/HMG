@@ -296,7 +296,8 @@ swing is published as a new asset: paste its id and grant access (step 2).
 
 **Stale guard.** `SwingData` records each swing's length. A published track whose length differs
 by more than 0.02s is treated as out of date. In Studio that tier plays the repo's
-KeyframeSequence instead (logged once); in a live server it plays the simple swing. A missing
+KeyframeSequence instead; in a live server every tier plays the simple swing. One warning per
+session names every out-of-date swing. A missing
 upper-body track just means the full-body swing plays while walking.
 
 ## 9. How the hard rules are enforced

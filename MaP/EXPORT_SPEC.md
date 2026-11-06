@@ -67,12 +67,15 @@ and rebuild. The export data lives in `MaP/export/` (not in git; rebuild it from
 
 ## Groups
 
-Built under `Workspace.Map`: `Hub` (one Persistent model) and `Lane` (one model per biome, Atomic,
-LevelOfDetail = StreamingMesh). 9,512 parts in all since the Nov 5 evening rebuild (12,291 before
+Built under `Workspace.Map`: `Hub` (one Persistent model) and `Lane` (one model per biome,
+Persistent, LevelOfDetail = Disabled). 9,512 parts in all since the Nov 5 evening rebuild (12,291 before
 the ladder), plus the Reef's mesh pieces. Bounds are Roblox studs.
-Streaming: target radius 1,024 around the player, StreamOutBehavior LowMemory (biomes stay loaded
-unless the device runs short of memory). The lane runs to about 2,294, so `StreamController` asks
-for the landing area the moment a flight starts.
+Streaming: since Nov 6 every biome is Persistent, so each client has the whole lane in full detail
+from the moment it joins, and no landing waits for its biome to load or shows a low-detail
+stand-in. The formula map is about 5,200 parts, light enough to keep loaded on low-end phones.
+Streaming stays on for everything else (target radius 1,024, StreamOutBehavior LowMemory), and
+`StreamController` still asks for the landing area when a flight starts, for anything there that
+isn't Persistent.
 
 The hub rows are from the first 1.25x export (Nov 5 morning); the lane rows are from the rebuild
 after the detail ladder (Nov 5 evening), when the Geyser Flats replaced the Volcano and the Pyramids
@@ -189,7 +192,8 @@ The lane has its own tools in `MaP/tools/` (the hub rebuild still follows the fi
    applies the matching-faces step (each face steps back 0.06 studs at most twice) and splits the
    parts into JSON files. `src/server/_MapBuild/` is in `.git/info/exclude`, so it never reaches
    git, but a running `rojo serve` syncs it into Studio, which is how the data gets there.
-3. **Build (Studio).** Each biome model is rebuilt from those files (Atomic, StreamingMesh). The
+3. **Build (Studio).** Each biome model is rebuilt from those files (Persistent, LevelOfDetail
+   Disabled). The
    stud class and collision per material come from `MaP/tools/lane_classes.json`: thin parts
    (middle size under 1.25) are smooth, rocks are sunk below 15 studs long, collision tags
    `PlaytestWalk`, parts under 3 studs cast no shadow. Then the markers (`AnimalSpot`, `FXAnchor`).

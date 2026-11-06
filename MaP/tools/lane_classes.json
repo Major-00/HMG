@@ -81,6 +81,10 @@
 "neon",
 1
 ],
+"Gf_GeyserCore": [
+"neon",
+1
+],
 "Gf_Heart": [
 "neon",
 1
@@ -175,6 +179,22 @@
 ],
 "Gf_Water": [
 "smooth",
+1
+],
+"Hb_Cap": [
+"rock",
+1
+],
+"Hb_Grass": [
+"raised",
+1
+],
+"Hb_Stone": [
+"rock",
+1
+],
+"Hb_Stone2": [
+"rock",
 1
 ],
 "Jr_Canal": [

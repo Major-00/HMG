@@ -321,7 +321,12 @@ def run(biomes, write_fbx=True):
         report[biome] = {"islands": dict(stats), "parts_before_merge": before, "parts": len(parts),
                          "meshes": len(made), "R": sum(1 for p in parts if p[0] == "R")}
     markers = []
+    live = set(c.name for c in bpy.context.scene.collection.children_recursive)
+    arch = bpy.data.collections.get("ARCHIVE_pre_formula")
+    archived = set(c.name for c in arch.children_recursive) if arch else set()
     for cn, folder in (("AnimalSpots", "AnimalSpot"), ("FX_Anchors", "FXAnchor")):
+        if cn not in live or cn in archived:
+            continue  # creature spots were dropped Nov 6 (map rule 1)
         for o in bpy.data.collections[cn].objects:
             p = rb_point(o.matrix_world.translation)
             props = {k: o[k] for k in o.keys() if not k.startswith("_") and isinstance(o[k], (int, float, str))}

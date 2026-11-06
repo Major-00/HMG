@@ -1,0 +1,496 @@
+{
+"_about": "Base colours (sRGB 0-255) for the Nov 6 colour pass, after Steal An Egg: each value renders at its measured Steal An Egg target under the Nov 6 lighting (calibrated with swatches in Studio). Names are Studio part names; the Blender material is B_<name>.",
+"colours": {
+"Hb_Grass": [
+99,
+187,
+59
+],
+"Hb_Grass2": [
+88,
+162,
+51
+],
+"Hb_Cap": [
+78,
+173,
+55
+],
+"Hb_Moss": [
+72,
+145,
+57
+],
+"Hb_Moss2": [
+86,
+163,
+62
+],
+"Hb_Cloudgrass": [
+113,
+206,
+76
+],
+"Hb_Cloudgrass2": [
+104,
+186,
+70
+],
+"Hb_Stone": [
+152,
+111,
+76
+],
+"Hb_Stone2": [
+135,
+98,
+67
+],
+"Hb_Stone3": [
+121,
+90,
+61
+],
+"Hb_Leaf": [
+72,
+149,
+60
+],
+"Hb_Leaf2": [
+93,
+175,
+68
+],
+"Hb_Trunk": [
+108,
+78,
+53
+],
+"Hb_Bark": [
+99,
+72,
+48
+],
+"Hb_Water": [
+50,
+132,
+211
+],
+"Hb_Gold": [
+255,
+179,
+46
+],
+"Hb_Cream": [
+252,
+212,
+141
+],
+"Md_Grass": [
+94,
+198,
+55
+],
+"Md_Grass2": [
+85,
+171,
+48
+],
+"Md_GrassCap": [
+67,
+158,
+53
+],
+"Md_Clover": [
+73,
+173,
+68
+],
+"Md_Stone": [
+145,
+106,
+72
+],
+"Md_Stone2": [
+128,
+95,
+63
+],
+"Md_Rock": [
+125,
+121,
+124
+],
+"Md_Rock2": [
+113,
+111,
+113
+],
+"Md_Leaf": [
+64,
+140,
+57
+],
+"Md_Leaf2": [
+91,
+169,
+65
+],
+"Md_Hedge": [
+53,
+123,
+54
+],
+"Md_Ivy": [
+60,
+132,
+58
+],
+"Md_Trunk": [
+109,
+81,
+55
+],
+"Md_Pink": [
+255,
+97,
+140
+],
+"Md_Yellow": [
+255,
+194,
+46
+],
+"Md_Threshold": [
+127,
+215,
+83
+],
+"Wh_Grass": [
+54,
+146,
+74
+],
+"Wh_Grass2": [
+48,
+130,
+66
+],
+"Wh_GrassCap": [
+64,
+164,
+81
+],
+"Wh_Ridge": [
+58,
+155,
+78
+],
+"Wh_Clover": [
+74,
+167,
+82
+],
+"Wh_RidgeStone": [
+89,
+95,
+120
+],
+"Wh_Stone": [
+100,
+104,
+130
+],
+"Wh_Stone2": [
+89,
+94,
+115
+],
+"Wh_Strata": [
+115,
+117,
+149
+],
+"Wh_Leaf": [
+48,
+118,
+67
+],
+"Wh_Leaf2": [
+72,
+145,
+81
+],
+"Wh_TallGrass": [
+120,
+190,
+82
+],
+"Wh_TallGrass2": [
+107,
+169,
+76
+],
+"Wh_Heather": [
+144,
+78,
+186
+],
+"Wh_Heather2": [
+179,
+101,
+223
+],
+"Wh_HeatherBase": [
+64,
+113,
+68
+],
+"Wh_Gorse": [
+255,
+186,
+44
+],
+"Wh_Lichen": [
+190,
+193,
+101
+],
+"Wh_Trunk": [
+105,
+77,
+54
+],
+"Wh_Threshold": [
+108,
+205,
+99
+],
+"Tg_Snow": [
+224,
+226,
+243
+],
+"Tg_Snow2": [
+184,
+195,
+223
+],
+"Tg_SnowCap": [
+255,
+255,
+255
+],
+"Tg_IceMid": [
+91,
+137,
+222
+],
+"Tg_IceLight": [
+129,
+178,
+247
+],
+"Tg_IceDeep": [
+60,
+101,
+176
+],
+"Tg_Frozen": [
+112,
+171,
+246
+],
+"Tg_FrozenFall": [
+160,
+222,
+255
+],
+"Tg_FrozenFall2": [
+107,
+165,
+245
+],
+"Tg_Icicle": [
+179,
+238,
+255
+],
+"Tg_Crystal": [
+108,
+199,
+255
+],
+"Tg_Pine": [
+45,
+105,
+85
+],
+"Tg_Rock": [
+104,
+105,
+120
+],
+"Tg_Rock2": [
+94,
+96,
+109
+],
+"Tg_CaveDark": [
+57,
+76,
+110
+],
+"Tg_Threshold": [
+129,
+200,
+255
+],
+"Jr_Grass": [
+111,
+136,
+54
+],
+"Jr_Grass2": [
+99,
+121,
+48
+],
+"Jr_Moss": [
+85,
+136,
+52
+],
+"Jr_Stone": [
+78,
+83,
+109
+],
+"Jr_Stone2": [
+69,
+76,
+97
+],
+"Jr_Dark": [
+53,
+56,
+72
+],
+"Jr_Pave": [
+162,
+140,
+104
+],
+"Jr_Leaf": [
+52,
+119,
+61
+],
+"Jr_Leaf2": [
+80,
+142,
+61
+],
+"Jr_Vine": [
+47,
+112,
+62
+],
+"Jr_Trunk": [
+103,
+77,
+53
+],
+"Jr_Canal": [
+45,
+127,
+192
+],
+"Jr_Fall": [
+145,
+217,
+255
+],
+"Reef_Sand": [
+72,
+115,
+205
+],
+"Rf_Sand2": [
+92,
+140,
+220
+],
+"Reef_Rock": [
+45,
+78,
+180
+],
+"Reef_RockLight": [
+85,
+132,
+222
+],
+"Reef_RockBand": [
+62,
+180,
+200
+],
+"Reef_CoralPink": [
+255,
+101,
+119
+],
+"Reef_CoralRose": [
+226,
+78,
+114
+],
+"Reef_CoralViolet": [
+131,
+88,
+210
+],
+"Reef_CoralYellow": [
+255,
+188,
+63
+],
+"Reef_Kelp": [
+64,
+139,
+81
+],
+"Reef_Lagoon": [
+45,
+185,
+205
+],
+"Rf_Clam": [
+140,
+102,
+221
+],
+"Rf_ClamLip": [
+90,
+205,
+183
+],
+"Rf_PoolRim": [
+250,
+161,
+166
+],
+"Rf_Threshold": [
+96,
+206,
+216
+],
+"Gf_GeyserCore": [
+120,
+230,
+255
+]
+},
+"_reef_nov6": "Reef walls and floor turned blue on Nov 6 (co-founders: the pink read as a cake island); pink, rose, yellow and violet stay on the corals, clams and pool rims."
+}

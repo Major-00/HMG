@@ -6,14 +6,15 @@
 
 local Migrations = {}
 
-Migrations.CURRENT_VERSION = 3
+Migrations.CURRENT_VERSION = 4
 
 -- Steps[n] upgrades a version-n save to version n + 1, editing it in place.
 local Steps: { [number]: (data: any) -> () } = {
-	-- v1 -> v2: the HomeRun Mascots economy. There were no live players, only test saves,
-	-- so v1 saves are wiped and the Template refills them on load. ProfileStore's Reconcile
-	-- only adds missing keys and never removes old ones (wins, pets, rebirths ...), so the
-	-- wipe has to be explicit. Run bumps the version after this step.
+	-- v1 -> v2 (history): this project started as another game, HomeRun Mascots, and v2 was
+	-- that game's save. There were no live players, only test saves, so v1 saves are wiped and
+	-- the Template refills them on load. ProfileStore's Reconcile only adds missing keys and
+	-- never removes old ones, so the wipe has to be explicit. Run bumps the version after this
+	-- step.
 	[1] = function(data)
 		table.clear(data)
 		data.version = 1
@@ -24,6 +25,37 @@ local Steps: { [number]: (data: any) -> () } = {
 		if data.pitcher == "pitching_machine" then
 			data.pitcher = "fungo"
 		end
+	end,
+	-- v3 -> v4: Lob an Orb! keeps only the hit: the old game's Cash, bats, balls, park, Mascots,
+	-- Index, stadium tiers and their settings are removed. Reconcile never removes keys, so
+	-- they go here. Only test saves exist.
+	[3] = function(data)
+		local oldKeys = {
+			"cash",
+			"bats",
+			"balls",
+			"park",
+			"mascots",
+			"nextMascotUid",
+			"seats",
+			"hotbar",
+			"onDeck",
+			"autoSell",
+			"index",
+			"stadiumTier",
+		}
+		for _, key in oldKeys do
+			data[key] = nil
+		end
+		if type(data.settings) == "table" then
+			data.settings.tipsSeen = nil
+			data.settings.indexSeen = nil
+		end
+		if type(data.lifetime) == "table" then
+			data.lifetime.cashEarned = nil
+			data.lifetime.mascotsCaught = nil
+		end
+		data.highestBiome = 1 -- the biomes changed
 	end,
 }
 

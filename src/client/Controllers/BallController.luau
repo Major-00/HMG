@@ -14,9 +14,10 @@
 --   HitResult (remote)         -> the server's real flight. If it differs from the prediction (a new
 --                                 multiplier, an on-land handler) the flight re-plans to it mid-air.
 -- Flights are arcs with a short trail; the end of the final descent plays in slow motion for the ball-cam.
--- Events for the camera and highlights:
+-- Events for the camera:
 --   BallController.Launched      -> Signal (hitId, info) when a hit's flight starts;
 --                                   info = { distance, landing: Vector3, airTime }
+--   BallController.SetGlow(hitId, color, amount) -> lights a landed orb (the POV catch)
 --   BallController.Touchdown     -> Signal (hitId, segmentIndex, position, distance, isFinal) at each landing
 --   BallController.GetBallPosition(hitId)    -> where that hit's ball is now, or nil once it's gone
 --   BallController.GetDistance(hitId)        -> that flight's current total distance, or nil
@@ -39,6 +40,7 @@ local StateController = require(script.Parent.StateController)
 
 local FIELD_DIRECTION = Vector3.zAxis -- lanes fire down +Z (see WorldService)
 local BALL_SIZE = 0.9
+local BALL_COLOR = Color3.fromRGB(250, 250, 245)
 local GROUND_OFFSET = BALL_SIZE / 2
 
 type Ball = { part: BasePart, trail: Trail }
@@ -103,7 +105,7 @@ local function newBall(): Ball
 	part.Name = "Ball"
 	part.Shape = Enum.PartType.Ball
 	part.Size = Vector3.new(BALL_SIZE, BALL_SIZE, BALL_SIZE)
-	part.Color = Color3.fromRGB(250, 250, 245)
+	part.Color = BALL_COLOR
 	part.Material = Enum.Material.SmoothPlastic
 	part.Anchored = true
 	part.CanCollide = false
@@ -145,7 +147,7 @@ local function acquire(): Ball?
 		if oldest == nil then
 			return nil
 		end
-		-- Still owe its landing to listeners (camera, highlights).
+		-- Still owe its landing to listeners (the camera).
 		checkTouchdowns(oldest, math.huge)
 		checkWatches(oldest, math.huge, true)
 		release(oldest.ball)
@@ -153,6 +155,12 @@ local function acquire(): Ball?
 	liveCount += 1
 	local ball = table.remove(pool) or newBall()
 	ball.part.Transparency = 0 -- a pooled ball may have been hidden by a catch
+	ball.part.Color = BALL_COLOR -- or lit by one (SetGlow)
+	ball.part.Material = Enum.Material.SmoothPlastic
+	local light = ball.part:FindFirstChild("CatchGlow")
+	if light then
+		light:Destroy()
+	end
 	ball.trail.WidthScale = NumberSequence.new(1) -- and its trail widened by a big hit
 	ball.part.Parent = folder
 	return ball
@@ -346,7 +354,33 @@ function BallController.GetBallPosition(hitId: number): Vector3?
 	return if flight then flight.ball.part.Position else nil
 end
 
--- Hides a landed hit's ball (the catch reveal's Mascot is holding its own copy). Visual only.
+-- Lights a landed hit's orb in a catch's rarity colour: `amount` 0 (plain) to 1 (fully lit).
+-- The pool puts the plain look back when the ball is reused. Visual only.
+function BallController.SetGlow(hitId: number, color: Color3, amount: number)
+	local flight = findFlight(hitId)
+	if flight == nil then
+		return
+	end
+	local part = flight.ball.part
+	local a = math.clamp(amount, 0, 1)
+	part.Color = BALL_COLOR:Lerp(color, a)
+	part.Material = if a > 0 then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	local light = part:FindFirstChild("CatchGlow") :: PointLight?
+	if light == nil and a > 0 then
+		local new = Instance.new("PointLight")
+		new.Name = "CatchGlow"
+		new.Shadows = false
+		new.Parent = part
+		light = new
+	end
+	if light then
+		light.Color = color
+		light.Range = 6 + 6 * a
+		light.Brightness = 3 * a
+	end
+end
+
+-- Hides a landed hit's ball (for a future catch view holding its own copy). Visual only.
 function BallController.HideBall(hitId: number)
 	local flight = findFlight(hitId)
 	if flight then

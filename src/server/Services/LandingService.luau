@@ -1,8 +1,8 @@
 --!strict
 -- LandingService: the on-land hook. After a hit, works out where the ball lands, lets each
 -- registered handler push it further (e.g. a bounce), runs the catch phase on the final landing
--- (the Mascot caught there), then fires Landed with the result.
--- No push handlers are registered yet; MascotService sets the catcher.
+-- (what was caught there), then fires Landed with the result.
+-- No push handlers or catcher are registered yet.
 --   LandingService.AddHandler(fn)  -> register a HookTypes.LandingHandler (must not yield)
 --   LandingService.SetCatcher(fn)  -> set the HookTypes.Catcher (must not yield)
 --   LandingService.Landed          -> Signal (ctx: HookTypes.LandingContext), after the catch
@@ -76,7 +76,7 @@ function LandingService.Resolve(
 	end
 	local final = context(player, hitId, segments)
 	if catcher then
-		-- A failed catch never stops the hit: the swing still counts, there's just no Mascot.
+		-- A failed catch never stops the hit: the swing still counts, there's just no catch.
 		local ok, caught = pcall(catcher, final)
 		if ok then
 			final.catch = caught

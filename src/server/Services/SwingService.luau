@@ -2,10 +2,9 @@
 -- SwingService: handles Swing(id): a Fungo toss id, or the id of the machine's pitch in play.
 -- Every allowed tap is a hit (CLAUDE.md), one per cycle (PitchService):
 -- +Power (x multiplier), then distance from total Power, the on-land hook, and a HitResult.
--- Hits don't pay Cash; seated Mascots do. The client has already drawn the hit; this confirms
--- the numbers.
+-- The client has already drawn the hit; this confirms the numbers.
 -- The client sends only the id; every number is decided here, from stats only. Where the
--- player stands in the hitting circle never matters.
+-- player stands in the hitting zone never matters.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -16,7 +15,6 @@ local Tuning = require(Shared.Config.Tuning)
 
 local Services = script.Parent
 local DataService = require(Services.DataService)
-local HighlightService = require(Services.HighlightService)
 local LandingService = require(Services.LandingService)
 local PitchService = require(Services.PitchService)
 local StatService = require(Services.StatService)
@@ -55,10 +53,10 @@ onSwing = function(player: Player, id: unknown)
 	})
 	local distance = landing.landedAt
 
-	-- Hold the next ball until the ball-cam (flight, catch reveal, return) is back. The client
+	-- Hold the next ball until the ball-cam (flight, landing hold, return) is back. The client
 	-- timed this cycle from its own tap, before this swing reached the server, so its camera is
-	-- always back first. A skipped reveal (Ready) can bring it forward, but never sooner than a
-	-- reveal of Reveal.MIN_SHOWN.
+	-- always back first. A skipped hold (Ready) can bring it forward, but never sooner than a
+	-- hold of Reveal.MIN_SHOWN.
 	local lead = PitchService.GetLead(player)
 	PitchService.QueueNext(
 		player,
@@ -67,7 +65,6 @@ onSwing = function(player: Player, id: unknown)
 		Formulas.ballCamTime(distance, Tuning.Reveal.MIN_SHOWN) + lead
 	)
 	local previousHighest = data.highestBiome
-	local previousBest = data.lifetime.bestDistance
 
 	DataService.Update(player, "lifetime", function(lifetime)
 		lifetime.swings += 1
@@ -87,9 +84,8 @@ onSwing = function(player: Player, id: unknown)
 		segments = landing.segments,
 		distance = distance,
 		biomeIndex = landing.biomeIndex,
-		catch = landing.catch, -- the Mascot caught (HookTypes.Catch), nil if the catch failed
+		catch = landing.catch, -- what was caught (HookTypes.Catch), nil when nothing was
 	})
-	HighlightService.Evaluate(player, hitId, distance, previousHighest, previousBest)
 end
 
 function SwingService.Start()

@@ -1,0 +1,629 @@
+{
+"_about": "Stud class and collision per lane material: [class, collides]. Classes: raised (Plastic, LobStudsRaised by override), sunk (Plastic + LobStudsSunk), rock (sunk below 15 studs long, raised above), smooth (SmoothPlastic), neon. Any part thinner than 1.25 studs in its middle size is smooth whatever its class. Read from the Nov 5 map; Geyser Flats added from MaP/EXPORT_SPEC.md.",
+"classes": {
+"Gf_Algae": [
+"raised",
+1
+],
+"Gf_Basalt": [
+"raised",
+1
+],
+"Gf_Basalt2": [
+"raised",
+1
+],
+"Gf_ColumnTop": [
+"raised",
+1
+],
+"Gf_Deep": [
+"smooth",
+1
+],
+"Gf_FCrust": [
+"raised",
+1
+],
+"Gf_FCrust_d": [
+"raised",
+1
+],
+"Gf_FGreen": [
+"raised",
+1
+],
+"Gf_FGreen_d": [
+"raised",
+1
+],
+"Gf_FOrange": [
+"raised",
+1
+],
+"Gf_FOrange_d": [
+"raised",
+1
+],
+"Gf_FRust": [
+"raised",
+1
+],
+"Gf_FRust_d": [
+"raised",
+1
+],
+"Gf_FTurq": [
+"smooth",
+1
+],
+"Gf_FTurq_d": [
+"smooth",
+1
+],
+"Gf_FUmber": [
+"raised",
+1
+],
+"Gf_FUmber_d": [
+"raised",
+1
+],
+"Gf_FYellow": [
+"raised",
+1
+],
+"Gf_FYellow_d": [
+"raised",
+1
+],
+"Gf_Flame": [
+"neon",
+1
+],
+"Gf_GeyserCore": [
+"neon",
+1
+],
+"Gf_Heart": [
+"neon",
+1
+],
+"Gf_MatGreen": [
+"smooth",
+1
+],
+"Gf_MatOrange": [
+"smooth",
+1
+],
+"Gf_MatYellow": [
+"smooth",
+1
+],
+"Gf_Mud": [
+"smooth",
+1
+],
+"Gf_MudDark": [
+"smooth",
+1
+],
+"Gf_Rust": [
+"smooth",
+1
+],
+"Gf_Sinter": [
+"sunk",
+1
+],
+"Gf_Sinter2": [
+"sunk",
+1
+],
+"Gf_Snag": [
+"sunk",
+1
+],
+"Gf_SnagSock": [
+"sunk",
+1
+],
+"Gf_Sulfur": [
+"smooth",
+1
+],
+"Gf_TravPool": [
+"smooth",
+1
+],
+"Gf_TravShade": [
+"raised",
+1
+],
+"Gf_Travertine": [
+"raised",
+1
+],
+"Gf_Turq": [
+"smooth",
+1
+],
+"Gf_Vent": [
+"neon",
+1
+],
+"Gf_WOchre": [
+"raised",
+1
+],
+"Gf_WOchreT": [
+"raised",
+1
+],
+"Gf_WSinter": [
+"raised",
+1
+],
+"Gf_WSinterT": [
+"raised",
+1
+],
+"Gf_WSlate": [
+"raised",
+1
+],
+"Gf_WSlateT": [
+"raised",
+1
+],
+"Gf_Water": [
+"smooth",
+1
+],
+"Hb_Cap": [
+"rock",
+1
+],
+"Hb_Grass": [
+"raised",
+1
+],
+"Hb_Stone": [
+"rock",
+1
+],
+"Hb_Stone2": [
+"rock",
+1
+],
+"Jr_Canal": [
+"smooth",
+1
+],
+"Jr_Dark": [
+"raised",
+1
+],
+"Jr_Fall": [
+"smooth",
+1
+],
+"Jr_Fire": [
+"smooth",
+1
+],
+"Jr_Flower2": [
+"smooth",
+0
+],
+"Jr_Foam": [
+"smooth",
+1
+],
+"Jr_Gold": [
+"smooth",
+1
+],
+"Jr_Grass": [
+"raised",
+1
+],
+"Jr_Grass2": [
+"raised",
+1
+],
+"Jr_Leaf": [
+"sunk",
+0
+],
+"Jr_Leaf2": [
+"sunk",
+0
+],
+"Jr_Moss": [
+"raised",
+1
+],
+"Jr_Pave": [
+"raised",
+1
+],
+"Jr_Stone": [
+"raised",
+1
+],
+"Jr_Stone2": [
+"raised",
+1
+],
+"Jr_Trunk": [
+"sunk",
+1
+],
+"Jr_Vine": [
+"smooth",
+0
+],
+"Md_Clover": [
+"smooth",
+1
+],
+"Md_Grass": [
+"raised",
+1
+],
+"Md_Grass2": [
+"raised",
+1
+],
+"Md_GrassCap": [
+"raised",
+1
+],
+"Md_Hedge": [
+"sunk",
+0
+],
+"Md_Hole": [
+"smooth",
+1
+],
+"Md_Ivy": [
+"sunk",
+0
+],
+"Md_Leaf": [
+"sunk",
+0
+],
+"Md_Leaf2": [
+"sunk",
+0
+],
+"Md_Pink": [
+"smooth",
+0
+],
+"Md_Rock": [
+"sunk",
+1
+],
+"Md_Rock2": [
+"sunk",
+1
+],
+"Md_Stone": [
+"raised",
+1
+],
+"Md_Stone2": [
+"raised",
+1
+],
+"Md_Threshold": [
+"raised",
+1
+],
+"Md_Trunk": [
+"sunk",
+1
+],
+"Md_Water": [
+"smooth",
+1
+],
+"Md_White": [
+"smooth",
+0
+],
+"Md_Yellow": [
+"smooth",
+0
+],
+"Reef_CoralPink": [
+"smooth",
+0
+],
+"Reef_CoralRose": [
+"smooth",
+1
+],
+"Reef_CoralViolet": [
+"smooth",
+1
+],
+"Reef_CoralYellow": [
+"smooth",
+0
+],
+"Reef_Kelp": [
+"smooth",
+0
+],
+"Reef_Lagoon": [
+"smooth",
+1
+],
+"Reef_Pearl": [
+"smooth",
+0
+],
+"Reef_Rock": [
+"rock",
+1
+],
+"Reef_RockBand": [
+"raised",
+1
+],
+"Reef_RockLight": [
+"raised",
+1
+],
+"Reef_Sand": [
+"smooth",
+1
+],
+"Reef_SeaGlass": [
+"smooth",
+0
+],
+"Reef_Shell": [
+"smooth",
+0
+],
+"Reef_ShellGlow": [
+"smooth",
+0
+],
+"Reef_Starfish": [
+"smooth",
+0
+],
+"Reef_Tentacle": [
+"smooth",
+0
+],
+"Reef_TubeDark": [
+"smooth",
+0
+],
+"Rf_Clam": [
+"smooth",
+1
+],
+"Rf_ClamLip": [
+"smooth",
+1
+],
+"Rf_Den": [
+"smooth",
+1
+],
+"Rf_Pearl": [
+"smooth",
+0
+],
+"Rf_PoolRim": [
+"raised",
+1
+],
+"Rf_Ripple": [
+"smooth",
+1
+],
+"Rf_Sand2": [
+"smooth",
+1
+],
+"Rf_Seagrass": [
+"smooth",
+0
+],
+"Rf_Threshold": [
+"raised",
+1
+],
+"Tg_CaveDark": [
+"raised",
+1
+],
+"Tg_CaveGlow": [
+"neon",
+1
+],
+"Tg_Crack": [
+"smooth",
+1
+],
+"Tg_Crystal": [
+"smooth",
+0
+],
+"Tg_Frozen": [
+"smooth",
+1
+],
+"Tg_FrozenFall": [
+"smooth",
+1
+],
+"Tg_FrozenFall2": [
+"smooth",
+1
+],
+"Tg_IceDeep": [
+"raised",
+1
+],
+"Tg_IceLight": [
+"raised",
+1
+],
+"Tg_IceMid": [
+"raised",
+1
+],
+"Tg_Icicle": [
+"smooth",
+0
+],
+"Tg_Pine": [
+"sunk",
+1
+],
+"Tg_Rock": [
+"rock",
+1
+],
+"Tg_Rock2": [
+"rock",
+1
+],
+"Tg_Snow": [
+"raised",
+1
+],
+"Tg_Snow2": [
+"raised",
+1
+],
+"Tg_SnowCap": [
+"raised",
+1
+],
+"Tg_Threshold": [
+"raised",
+1
+],
+"Tn_Hole": [
+"smooth",
+1
+],
+"Wh_Berry": [
+"smooth",
+0
+],
+"Wh_Clover": [
+"smooth",
+1
+],
+"Wh_Gorse": [
+"sunk",
+0
+],
+"Wh_Grass": [
+"raised",
+1
+],
+"Wh_Grass2": [
+"raised",
+1
+],
+"Wh_GrassCap": [
+"raised",
+1
+],
+"Wh_Harebell": [
+"smooth",
+0
+],
+"Wh_Heather": [
+"sunk",
+0
+],
+"Wh_Heather2": [
+"sunk",
+0
+],
+"Wh_HeatherBase": [
+"sunk",
+0
+],
+"Wh_Hole": [
+"smooth",
+1
+],
+"Wh_Leaf": [
+"sunk",
+0
+],
+"Wh_Leaf2": [
+"sunk",
+0
+],
+"Wh_Lichen": [
+"smooth",
+0
+],
+"Wh_Moss": [
+"raised",
+1
+],
+"Wh_Petal": [
+"smooth",
+0
+],
+"Wh_Ridge": [
+"raised",
+1
+],
+"Wh_RidgeStone": [
+"raised",
+1
+],
+"Wh_Snow": [
+"raised",
+1
+],
+"Wh_Stone": [
+"raised",
+1
+],
+"Wh_Stone2": [
+"raised",
+1
+],
+"Wh_Strata": [
+"raised",
+1
+],
+"Wh_TallGrass": [
+"smooth",
+0
+],
+"Wh_TallGrass2": [
+"smooth",
+0
+],
+"Wh_Threshold": [
+"raised",
+1
+],
+"Wh_Trunk": [
+"sunk",
+1
+]
+}
+}

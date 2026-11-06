@@ -79,7 +79,9 @@ local contactPassed = false -- this swing's ball has left the bat
 local cameraBackAt: number? = nil
 local warned = false -- the missing-animations warning, once per session
 local warnedAccess = false -- the can't-load warning, once per session
+local staleNames: { string } = {} -- published swings found to be old uploads, for the warning
 local warnedStale = false -- the old-upload warning, once per session
+local staleChecked = false -- this character's first check of every tier is done
 local isCameraAway: () -> boolean = function()
 	return false
 end
@@ -211,9 +213,11 @@ local function upperTrack(animator: Animator, name: string, published: string?):
 end
 
 local checkStale: (tierIndex: number, set: TierSwings, pair: Pair) -> () -- defined below
+local flushStale: () -> () -- defined below
 
 local function setup(character: Model)
 	stance, carry, active, handlers, held, upperOn, animatorRef = nil, nil, nil, nil, false, false, nil
+	staleChecked = false
 	table.clear(swings)
 	local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
 	if humanoid == nil or humanoid.RigType ~= Enum.HumanoidRigType.R15 then
@@ -291,6 +295,8 @@ local function setup(character: Model)
 				checkStale(i, set, pair)
 			end
 		end
+		staleChecked = true
+		flushStale()
 		if #preload > before then
 			pcall(ContentProvider.PreloadAsync, ContentProvider, { table.unpack(preload, before + 1) })
 		end
@@ -310,18 +316,29 @@ local function isStale(track: AnimationTrack, tierIndex: number): boolean
 	return math.abs(track.Length - SwingData.TIERS[tierIndex].length) > STALE_BY
 end
 
-local function warnStale(name: string)
-	if warnedStale then
+-- One warning that names every old upload, given once the first check has seen every tier.
+function flushStale()
+	if warnedStale or #staleNames == 0 then
 		return
 	end
 	warnedStale = true
+	local names = table.concat(staleNames, ", ")
 	warn(
-		`[SwingAnimator] The published {name} is an old version (its length doesn't match SwingData).`
+		`[SwingAnimator] Old published version (its length doesn't match SwingData): {names}.`
 			.. (if RunService:IsStudio()
 				then " Studio plays the repo's version instead."
 				else " The simple swing plays instead.")
-			.. " Re-publish the swing animations: see docs/ARCHITECTURE.md, 'Publishing the animations'."
+			.. " Re-publish each over its existing asset: see docs/ARCHITECTURE.md, 'Publishing the animations'."
 	)
+end
+
+local function warnStale(name: string)
+	if not table.find(staleNames, name) then
+		table.insert(staleNames, name)
+	end
+	if staleChecked then
+		flushStale()
+	end
 end
 
 -- An old published upload (its length doesn't match SwingData): in Studio swap in the repo's
@@ -344,8 +361,13 @@ function checkStale(tierIndex: number, set: TierSwings, pair: Pair)
 				end
 			end
 			if #fresh < 2 then
-				-- Live: every tier plays the simple swing, so all tiers swing the same way.
-				for _, other in swings do
+				-- Live: every tier plays the simple swing, so all tiers swing the same way. Name the
+				-- other tiers' old uploads too, so one re-publish fixes them all.
+				for j, other in swings do
+					local first = other.pairs[1].full
+					if j ~= tierIndex and other.checkFull and first.Length > 0 and isStale(first, j) then
+						warnStale(SwingData.TIERS[j].name)
+					end
 					for _, p in other.pairs do
 						discard(p.full)
 						discard(p.upper)

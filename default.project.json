@@ -1,16 +1,18 @@
 {
-  "name": "HomeRunMascots",
+  "name": "LobAnOrb",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
       },
-      "Landmarks": {
-        "$path": "assets/Landmarks"
-      },
       "Animations": {
         "$path": "assets/Animations"
+      }
+    },
+    "ReplicatedFirst": {
+      "Preload": {
+        "$path": "src/first"
       }
     },
     "ServerScriptService": {
@@ -27,7 +29,37 @@
     },
     "Workspace": {
       "$properties": {
-        "StreamingEnabled": true
+        "StreamingEnabled": true,
+        "StreamOutBehavior": "LowMemory"
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Ambient": [0.2745098, 0.2745098, 0.3058824],
+        "Brightness": 3,
+        "ClockTime": 14.5,
+        "ColorShift_Bottom": [0, 0, 0],
+        "ColorShift_Top": [1, 1, 1],
+        "EnvironmentDiffuseScale": 0.4,
+        "EnvironmentSpecularScale": 0.15,
+        "ExposureCompensation": 0,
+        "FogColor": [0.7529412, 0.7529412, 0.7529412],
+        "FogEnd": 100000,
+        "FogStart": 0,
+        "GeographicLatitude": 0,
+        "GlobalShadows": true,
+        "LightingStyle": "Realistic",
+        "OutdoorAmbient": [0.5019608, 0.5019608, 0.5333333],
+        "PrioritizeLightingQuality": true,
+        "ShadowSoftness": 0.15
+      },
+      "ColorCorrection": {
+        "$className": "ColorCorrectionEffect",
+        "$properties": {
+          "Saturation": 0.1,
+          "Contrast": 0.1,
+          "TintColor": [1, 1, 1]
+        }
       }
     }
   }

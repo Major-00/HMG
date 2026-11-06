@@ -1,6 +1,6 @@
 --!strict
 -- Tuning: every tunable number in the game lives here. Code reads these; it never hard-codes them.
--- Distances are in studs along the flight track, measured from home plate.
+-- Distances are in studs along the flight track, measured from the hit line.
 
 local Tuning = {
 	Data = {
@@ -33,44 +33,37 @@ local Tuning = {
 	},
 
 	Power = {
-		PER_HIT = 1, -- the "+1": Power gained per hit, before multipliers (stadium tier: Config/Stadium)
+		PER_HIT = 1, -- the "+1": Power gained per hit, before multipliers
 	},
 
-	-- distance = BASE + PER_POWER * power ^ EXPONENT, using total Power after the hit
+	-- distance = BASE + PER_POWER * power ^ EXPONENT, using total Power after the hit.
+	-- Scaled with the map (1.25x, MaP/EXPORT_SPEC.md) so the pacing doesn't change: PER_POWER 12.5
+	-- reaches Windy Highlands (206 studs) on hit 15, about 50s in (about 40s with every landing
+	-- hold skipped). CLAUDE.md: Biome 2 within 60s.
 	Distance = {
-		BASE = 20,
-		PER_POWER = 4,
+		BASE = 25,
+		PER_POWER = 12.5,
 		EXPONENT = 1,
 	},
 
-	-- Where each World 1 biome starts, in Config/Biomes order (Sandlot ... Canyon).
-	-- Biome 2 at 80 studs = 15 hits from a fresh save (20 + 4 * 15). With the ball-cam and a 1s
-	-- catch reveal each hit takes about 3.0-3.3s (2.3-2.6s with the reveal skipped), so that's
-	-- roughly 37-46s of play.
-	BiomeStarts = { 0, 80, 500, 1800, 5000, 12000 },
+	-- Where each biome starts, in studs from the hit line, in Config/Biomes order: each one is that
+	-- biome's floor edge on the island map (Meadow, Windy Highlands, Tundra, Jungle Ruins,
+	-- Coral Reef, Geyser Flats). The map is built at 1.25x the Blender layout (MaP/EXPORT_SPEC.md);
+	-- the lane ends at the Geyser Flats' closing cliff behind the giant geyser, about 2,294 studs out.
+	BiomeStarts = { 0, 206, 456, 769, 1144, 1613 },
 
 	World = {
-		LANE_COUNT = 5, -- ballparks per server (one per player; set the place's max players to match)
-		LANE_SPACING = 30, -- studs between lanes, side to side
+		-- The island map's launch strip: its front edge is the hit line (Z = 0) and the lane runs
+		-- down +Z. Everyone spawns on the hub overlook (the map's Spawn marker).
+		LANE_COUNT = 5, -- batting lanes per server (one per player; set the place's max players to match)
+		LANE_SPACING = 7.5, -- studs between lanes, side to side (fits the 45-stud launch strip)
 		PITCH_DISTANCE = 20, -- studs from the plate to the pitching machine (when it's used)
 		STRIKE_HEIGHT = 3, -- studs above the ground where the ball is hit
-		-- The shared hitting zone (shared/HitZone): one dirt strip across every lane, from `back`
-		-- (just in front of the ballparks) up to the hit line at `front`. Walk anywhere and tap:
+		-- The shared hitting zone (shared/HitZone): the launch strip across every lane, from `back`
+		-- (the back of the launch strip) up to the hit line at `front`. Walk anywhere and tap:
 		-- a tap from outside it still hits, from the nearest point of the zone. Its width comes
 		-- from LANE_COUNT and LANE_SPACING. Distances are measured from the hit line (Z = front).
-		HIT_ZONE = { back = -18, front = 0 },
-
-		-- Biome ground, built on the client and streamed around the camera
-		TILE_LENGTH = 100, -- longest ground tile; each biome is cut into tiles from its own start
-		STREAM_AHEAD = 600, -- studs of ground kept built in front of the camera
-		STREAM_BEHIND = 150, -- ... and behind it
-		BEHIND_PLATE = 120, -- Sandlot ground also runs this far behind home plate
-		FIELD_MARGIN = 40, -- extra ground width past the outer lanes, each side
-		PROP_BAND = 60, -- width of the prop strip outside the field, each side
-		PROPS_PER_TILE = 3, -- most props per tile (each side gets some)
-		LANDMARK_OFFSET_Z = 60, -- landmark sits this far past its biome's start ...
-		LANDMARK_SIDE = 25, -- ... and this far outside the field's right edge
-		LIGHTING_TWEEN = 0.6, -- seconds to blend lighting into a new biome
+		HIT_ZONE = { back = -12.5, front = 0 }, -- the island's launch strip (12.5 studs deep)
 	},
 
 	-- Client-only visuals (no effect on stats)
@@ -103,14 +96,6 @@ local Tuning = {
 		CUT_BEYOND = 250, -- landings farther than this cut back (fade) instead of swooping
 		CUT_TIME = 0.3, -- seconds for the fade-out + fade-in of a cut
 		PITCH_ARRIVE_AFTER_RETURN = 0.15, -- machine: next ball reaches the plate this long after the camera is back
-	},
-
-	Highlight = {
-		BANNER_TIME = 1.4, -- seconds the biome banner stays fully visible ...
-		BANNER_QUEUED_TIME = 0.5, -- ... or this long when another banner is waiting
-		-- "PERFECT!" plays when the ball enters a new biome, or when a hit pushes your best distance
-		-- past one of these milestones (studs). Past the last one it keeps going x2, x2.5, x2 ...
-		RECORD_MILESTONES = { 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000 },
 	},
 
 	Swing = {
@@ -239,83 +224,30 @@ local Tuning = {
 		},
 	},
 
-	-- The Mascot caught on every landing. One shared function (Formulas.catchOdds) turns these
-	-- into each species' chance, for both the server roll and every odds screen.
+	-- The landing hold: the camera stays on the landing before swooping back. The server times the
+	-- next pitch with the same numbers (Formulas.revealTime / ballCamTime). Visual only: it never
+	-- changes the result.
+	-- The catch roll on the final landing (server, CatchService). PLACEHOLDERS: the real numbers
+	-- are the Checklist decision "Base catch rate and pity count", set in soft launch.
 	Catch = {
-		-- Luck climbs with landing distance:
-		--   luck = min(MAX_LUCK, 1 + PER_DOUBLING * log2(1 + distance / BASE_STUDS)) x boost
-		-- About 1.25 at 100 studs, 1.65 at 500, 2.7 at 12K.
-		LUCK = {
-			BASE_STUDS = 100,
-			PER_DOUBLING = 0.25,
-			MAX_LUCK = 4,
-		},
-		-- Each rarity's ball weight is multiplied by luck ^ ((rank - 1) * LUCK_POWER), where rank is
-		-- its position in Config/Mascots Rarities (Common = 1). Common never changes; Mythic gains most.
-		LUCK_POWER = 0.5,
-
-		-- Rolled separately from the species and from each other; both multiply earnings and
-		-- sell value. "none" / "normal" get whatever chance is left.
-		VARIANTS = {
-			{ id = "allStar", displayName = "All-Star", chance = 0.05, multiplier = 1.5 },
-			{ id = "goldGlove", displayName = "Gold Glove", chance = 0.01, multiplier = 3 },
-			{ id = "hallOfFame", displayName = "Hall of Fame", chance = 0.002, multiplier = 10 },
-		},
-		SIZES = {
-			{ id = "big", displayName = "Big", chance = 0.08, multiplier = 1.5 },
-			{ id = "giant", displayName = "Giant", chance = 0.01, multiplier = 3 },
-		},
-
-		-- Cash per second for a plain (no variant, normal size) Mascot:
-		--   RARITY_CASH[rarity] x BIOME_CASH[biomeIndex] x WORLD_CASH[world]
-		RARITY_CASH = { common = 1, uncommon = 3, rare = 10, epic = 35, legendary = 150, mythic = 1000 },
-		BIOME_CASH = { 1, 3, 10, 40, 150, 600 },
-		-- x WORLD_CASH[world]: a World 2 Sandlot Common earns about what a World 1 Canyon Common
-		-- does, so World 2 catches are worth seating from the first swing.
-		WORLD_CASH = { 1, 1000 },
-
-		-- Sell value = this many seconds of the Mascot's earnings (variant and size included).
-		SELL_SECONDS = 30,
+		CHANCE = 0.25, -- chance a landing catches something
+		PITY = 8, -- after this many hits in a row with no catch, the next one catches
+		FIRST_ON_HIT = 2, -- a player's first catch is guaranteed on this hit (Context: first or second)
+		-- Rarity weights, lowest first (Config/Rarities). Luck multiplies the weights of
+		-- LUCKY_FROM and up, so farther hits catch rarer creatures.
+		WEIGHTS = { 60, 25, 10, 4, 0.9, 0.1 },
+		LUCKY_FROM = 3, -- Rare and up
+		LUCK_PER_STUD = 1 / 600, -- Luck = 1 + distance x this (about x2 at the Coral Reef, x4.8 at the cliff)
+		FULL_FROM = 3, -- rarity rank that plays the full POV (Rare and up); lower ones get the short one
 	},
 
-	-- The catch reveal: the camera stays on the landing while the Mascot catches the ball. It
-	-- replaces the old landing hold, and the server times the next pitch with the same numbers
-	-- (Formulas.revealTime / ballCamTime). Visual only: it never changes the result.
 	Reveal = {
-		SHORT = 1, -- seconds for most catches
-		FULL = 3, -- seconds for a new species of FULL_FROM_RARITY or rarer
-		FULL_FROM_RARITY = "rare",
-		-- Tapping skips the reveal and tells the server (Ready) so the next pitch comes sooner.
+		SHORT = 1, -- seconds for a landing with no catch, and the short POV of a low catch
+		FULL = 3, -- seconds for the full POV catch (Rare and up, and a player's first catch)
+		-- Tapping skips the hold and tells the server (Ready) so the next pitch comes sooner.
 		-- The server never throws it earlier than this long after the ball lands (plus the
 		-- camera's return), so skipping can't make the game faster than this.
 		MIN_SHOWN = 0.3,
-
-		-- What the reveal shows (CatchRevealController): the Mascot runs in, hops to catch the
-		-- ball, turns to the camera, and its name types in. Times scale with the reveal length.
-		RUN_FROM_FULL = 16, -- studs the Mascot runs in a full reveal ...
-		RUN_FROM_SHORT = 5, -- ... and in a short one
-		RUN_PORTION = 0.45, -- share of the reveal spent running to the ball
-		HOP_TIME = 0.25, -- seconds of the catching hop
-		HOP_HEIGHT = 2.5, -- studs (times the Mascot's size)
-		TURN_TIME = 0.2, -- seconds to turn and face the camera after the catching hop
-		TYPE_FULL = 0.9, -- seconds for the name to type in, full reveal ...
-		TYPE_SHORT = 0.35, -- ... short reveal
-		CAM_BACK = 8, -- studs behind the running Mascot (times its size)
-		CAM_FRONT = 9, -- studs in front of it for the name shot (times its size)
-		CAM_UP = 4.5, -- studs above (times its size)
-		CAM_SIDE = 4, -- studs to the side while it runs, so it doesn't block the ball (times its size)
-		SIZE_SCALE = { normal = 1, big = 1.35, giant = 1.8 }, -- how big each size looks
-		LINGER_AFTER = 0.4, -- seconds the Mascot stays after the reveal, while the camera swoops back
-	},
-
-	-- Seated Mascots earn Cash every second (Formulas.cashRate), online and offline.
-	Income = {
-		PAY_EVERY = 1, -- seconds between payouts while playing
-	},
-	Offline = {
-		CAP_SECONDS = 3 * 60 * 60, -- offline earnings stop after 3 hours away
-		MIN_WELCOME_SECONDS = 60, -- the Welcome Back screen only shows after at least this long away
-		WELCOME_TIME = 4, -- seconds the Welcome Back card stays up (it never takes taps)
 	},
 }
 

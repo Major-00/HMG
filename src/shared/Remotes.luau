@@ -11,34 +11,20 @@ local Remotes = {}
 
 -- Client -> Server (RemoteEvent)
 Remotes.Events = {
-	"Swing", -- (pitchId: number). Always a hit if it matches the pitch in play; otherwise ignored.
-	"Ready", -- (hitId: number). The catch reveal for that hit was skipped; the next pitch may come sooner.
+	"Swing", -- (id: number) a Fungo toss id or the machine's pitch id. One hit per cycle; repeats are ignored.
+	"Ready", -- (hitId: number). The landing hold for that hit was skipped; the next pitch may come sooner.
 }
 
 -- Client -> Server (RemoteFunction, returns { ok: boolean, err: string?, ... })
 Remotes.Functions = {
 	"GetData", -- () -> full snapshot of the caller's own save, or nil if it never loaded
-	"BuyBat", -- (batId: string) the next bat in order; equips it
-	"EquipBat", -- (batId: string) a bat you own
-	"BuyBall", -- (ballId: string) the next ball tier in order; Cash only
-	"BuyParkUpgrade", -- (upgradeId: string) the next level of a park upgrade (Config/Park)
-	"Promote", -- () stadium promotion, if the next tier's requirements are met
-	"SellMascot", -- (uid: string) -> { ok, err?, cash?, species? }; refused if locked
-	"LockMascot", -- (uid: string, locked: boolean)
-	"MoveMascot", -- (uid: string, place: "seats" | "hotbar" | "onDeck", slot: number); swaps if taken
-	"EquipBest", -- () seats the top 10 earners
-	"SetAutoSell", -- (on: boolean) sells nothing by itself
-	"MarkIndexSeen", -- () every caught species counts as seen in the Index (clears the "new" dot)
-	"GetWelcomeBack", -- () -> { seconds, cash } once after offline earnings were paid, else nil
 }
 
 -- Server -> Client (RemoteEvent)
 Remotes.ServerEvents = {
 	"Pitch", -- HookTypes.Pitch
 	"HitResult", -- { hitId, powerGained, pitcherBonus, segments: {FlightSegment}, distance, biomeIndex, catch: HookTypes.Catch? }
-	"Highlight", -- HookTypes.Highlight without the player field
 	"DataChanged", -- { [topLevelKey]: newValue } for keys changed since the last frame
-	"ShopNotice", -- { kind = "ball", id }: your Cash first covers this ball (once per tier per run)
 }
 
 local FOLDER_NAME = "Remotes"

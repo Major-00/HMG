@@ -1,6 +1,6 @@
 --!strict
 -- HookTypes: contracts for the swappable gameplay hooks.
--- Types only. New pitchers, the Mascot catch, rare-catch clips and biome challenges plug in here.
+-- Types only. New pitchers, landing handlers and the catch plug in here.
 -- Distances are in studs along the flight track, measured from the hit line (home plate).
 
 -- One pitch, decided by the server and sent to the client to draw (pitchers with mode "throw").
@@ -16,7 +16,7 @@ export type Pitch = {
 -- PITCHER SLOT. Each player has exactly one active pitcher. Two kinds:
 --   "toss"  (Fungo, the default): the player's tap tosses and swings in one motion; the server
 --           allows one hit per cycle and sends no Pitch.
---   "throw" (the pitching machine; a pitcher pet may use it later): the server throws each
+--   "throw" (the pitching machine; a future pitcher may use it): the server throws each
 --           Pitch, and a tap hits the one in play.
 export type Pitcher = {
 	id: string,
@@ -46,97 +46,31 @@ export type LandingContext = {
 	biomeIndex: number, -- biome under landedAt
 	biomeName: string, -- display name of that biome
 	position: Vector3, -- where the ball lands, on the lane's centre line (the client uses the batter's X)
-	catch: Catch?, -- the Mascot caught, on the final context only (nil if the catch failed)
+	catch: Catch?, -- what was caught, on the final context only (nil when nothing was)
 }
 
--- ON-LAND HOOK. Runs on the server, in registration order, before the Mascot catch (which uses
+-- ON-LAND HOOK. Runs on the server, in registration order, before the catch phase (which uses
 -- the final distance). Return a FlightSegment to push the ball further (e.g. a bounce), or nil.
 -- Handlers must not yield. LandingService.Landed fires after all handlers with the final context.
 export type LandingHandler = (ctx: LandingContext) -> FlightSegment?
 
--- A Mascot sold to make room, at its full sell value.
-export type SoldMascot = {
-	species: string,
-	variant: string,
-	size: string,
-	cash: number,
-}
-
--- The Mascot caught on a landing. Decided by the server and sent to the client in HitResult.
+-- What a landing caught (CatchService). The species waits for the roster: until then a catch
+-- is a rarity. The name is never shown before the Reveal Ring anyway.
 export type Catch = {
-	uid: string, -- the new Mascot's id in the save (still set when it was the one sold)
-	species: string,
-	rarity: string,
-	variant: string,
-	size: string,
-	cashPerSec: number, -- before park upgrades and the stadium tier
-	placedIn: "seat" | "hotbar" | "onDeck" | "sold", -- "sold": no room and this catch was the weaker
-	slot: number?, -- seat or hotbar index
-	isNewSpecies: boolean, -- first time this species was caught (its Index card just unlocked)
-	sold: SoldMascot?, -- whatever was sold to make room (the catch itself when placedIn = "sold")
+	rarity: string, -- Config/Rarities id
+	rank: number, -- 1 (Common) to 6 (Mythic)
+	biomeIndex: number, -- where it was caught
+	full: boolean, -- plays the full POV (Formulas.revealTime)
+	first: boolean, -- the player's first catch ever
 }
 
 -- CATCH PHASE of the on-land hook. Runs once, after every LandingHandler, on the final landing.
--- Rolls and places the Mascot (MascotService). Must not yield.
+-- CatchService registers it. Must not yield.
 export type Catcher = (ctx: LandingContext) -> Catch?
-
--- HIGHLIGHT EVENT. Fired after a hit is final.
-export type HighlightKind = "record" | "biome"
-export type Highlight = {
-	player: Player,
-	hitId: number,
-	kind: HighlightKind,
-	distance: number,
-	biomeIndex: number, -- for "biome": the newly reached biome
-	previousBest: number?, -- for "record": the best distance before this hit
-	-- For "record", `distance` is the milestone passed (Tuning.Highlight.RECORD_MILESTONES).
-}
-
--- PER-BIOME CHALLENGE SLOT (config only; nil for every biome in the MVP).
-export type BiomeChallenge = {
-	id: string,
-	kind: string, -- e.g. "land_in_zone", "hit_streak"; defined when challenges are built
-	params: { [string]: any },
-}
-
--- One piece of a placeholder prop. Built on the client; no assets.
-export type PropPiece = {
-	shape: "Block" | "Ball" | "Cylinder" | "Wedge",
-	size: Vector3,
-	offset: Vector3, -- from the prop's ground point; y is the piece's center height
-	color: Color3,
-	material: Enum.Material?, -- default SmoothPlastic
-	rot: Vector3?, -- degrees (cylinders run along X; rot = (0, 0, 90) stands one up)
-}
-export type Prop = { PropPiece }
-
-export type BiomeLighting = {
-	clockTime: number,
-	brightness: number,
-	ambient: Color3,
-	outdoorAmbient: Color3,
-	atmosphereColor: Color3,
-	atmosphereDecay: Color3,
-	density: number,
-	haze: number,
-}
-
-export type BiomeVisual = {
-	ground: Color3, -- field ground under the lanes
-	material: Enum.Material,
-	side: Color3, -- ground outside the field, where props stand
-	sideMaterial: Enum.Material,
-	accent: Color3, -- start line, banner and landing popup color
-	lighting: BiomeLighting,
-	props: { Prop }, -- picked from per tile
-}
 
 export type BiomeConfig = {
 	id: string,
 	displayName: string,
-	landmark: string, -- name of a model under ReplicatedStorage.Landmarks
-	challenge: BiomeChallenge?, -- empty for now
-	visual: BiomeVisual,
 	-- Where each biome starts is in Config/Tuning (BiomeStarts).
 }
 

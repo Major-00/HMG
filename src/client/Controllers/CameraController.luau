@@ -12,7 +12,8 @@
 -- sends Ready, so the server can bring the next pitch forward; it never waits on the client.
 --   CameraController.IsActive()   -> true from the hit until the camera is back on the batter
 --   CameraController.SkipReveal() -> ends the reveal now if one is showing; true if it did
---   CameraController.RevealStarted / RevealEnded, SetRevealCamera(fn) -> for CatchRevealController
+--   CameraController.RevealStarted / RevealEnded, SetRevealCamera(fn) -> the catch view
+--     (CatchController) sets the shot during the hold
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -53,7 +54,7 @@ type Cam = {
 
 local CameraController = {}
 
--- The catch reveal, for CatchRevealController (it draws the Mascot; this only times it):
+-- The landing hold (it only times it; a future catch view can listen):
 --   RevealStarted (hitId, landing: Vector3, seconds, catch) when the camera starts holding
 --   RevealEnded   (hitId, skipped: boolean) when it stops, however it stops
 CameraController.RevealStarted = Signal.new()
@@ -297,11 +298,13 @@ local function step(dt: number)
 		local landing = state.landing :: Vector3
 		local elapsed = now - state.phaseStart
 		local shot = if revealCamera then revealCamera(state.hitId, elapsed) else nil
-		if shot and not state.cutIn then
+		if shot then
+			-- A scripted shot (the POV catch) is followed exactly: it cuts in and does its own
+			-- easing.
 			state.cutIn = true
-			current.CFrame = shot -- cut straight to the Mascot's view
+			current.CFrame = shot
 		else
-			current.CFrame = current.CFrame:Lerp(shot or chaseCFrame(landing, 3), smoothing(dt))
+			current.CFrame = current.CFrame:Lerp(chaseCFrame(landing, 3), smoothing(dt))
 		end
 		if elapsed >= state.holdFor then
 			beginReturn(state)
@@ -348,7 +351,8 @@ function CameraController.SkipReveal(): boolean
 	return true
 end
 
--- Sets the reveal's camera shot (CatchRevealController). Returning nil keeps the default view.
+-- Sets the reveal's camera shot (the POV catch). It's used exactly as given; nil keeps the
+-- default landing view.
 function CameraController.SetRevealCamera(fn: (hitId: number, elapsed: number) -> CFrame?)
 	revealCamera = fn
 end

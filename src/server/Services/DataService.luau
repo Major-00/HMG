@@ -89,8 +89,8 @@ local function loadPlayer(player: Player)
 		data.firstJoin = profile.FirstSessionTime
 	end
 	data.lastJoin = os.time()
-	-- Stamp every save (autosaves and the final save on leave) with the time, so offline
-	-- earnings count from the last moment this save was known to be current. Bookkeeping only:
+	-- Stamp every save (autosaves and the final save on leave) with the time, so it always
+	-- shows the last moment this save was known to be current. Bookkeeping only:
 	-- nothing on the client shows it, so it doesn't go through Update.
 	profile.OnSave:Connect(function()
 		profile.Data.lastOnline = os.time()

@@ -7,53 +7,22 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local Template: Types.PlayerData = {
-	version = 3,
+	version = 4,
 
-	-- Run progress: reset on stadium promotion
 	power = 0,
-	cash = 0,
-	bats = {
-		owned = { starter = true },
-		equipped = "starter",
-	},
-	balls = {
-		owned = { basic = true },
-		notified = {}, -- ball ids whose "New ball unlocked" notice was shown this run
-	},
-	park = {
-		bleachers = 0,
-		concessions = 0,
-		scoreboard = 0,
-		lights = 0,
-		jumbotron = 0,
-	},
 	highestBiome = 1,
-
-	-- Kept forever (Safe at home)
-	mascots = {},
-	nextMascotUid = 1,
-	seats = { false, false, false, false, false, false, false, false, false, false },
-	hotbar = { false, false, false, false },
-	onDeck = false,
-	autoSell = true,
-	index = {},
-	stadiumTier = 1,
 	pitcher = "fungo",
 
 	settings = {
 		music = true,
 		sfx = true,
 		lowGraphics = false,
-		tipsSeen = {},
-		indexSeen = {}, -- species whose Index card the player has looked at (for the "new" dot)
 	},
 
-	-- Lifetime stats (never reset)
 	lifetime = {
 		swings = 0,
-		cashEarned = 0,
-		mascotsCaught = 0,
 		bestDistance = 0,
+		catches = 0,
 	},
 
 	firstJoin = 0,

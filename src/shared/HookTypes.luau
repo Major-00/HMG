@@ -54,11 +54,18 @@ export type LandingContext = {
 -- Handlers must not yield. LandingService.Landed fires after all handlers with the final context.
 export type LandingHandler = (ctx: LandingContext) -> FlightSegment?
 
--- What a landing caught. Nothing catches yet; the catch hook stays for the winged creatures.
-export type Catch = { [string]: any }
+-- What a landing caught (CatchService). The species waits for the roster: until then a catch
+-- is a rarity. The name is never shown before the Reveal Ring anyway.
+export type Catch = {
+	rarity: string, -- Config/Rarities id
+	rank: number, -- 1 (Common) to 6 (Mythic)
+	biomeIndex: number, -- where it was caught
+	full: boolean, -- plays the full POV (Formulas.revealTime)
+	first: boolean, -- the player's first catch ever
+}
 
 -- CATCH PHASE of the on-land hook. Runs once, after every LandingHandler, on the final landing.
--- Nothing registers one yet. Must not yield.
+-- CatchService registers it. Must not yield.
 export type Catcher = (ctx: LandingContext) -> Catch?
 
 export type BiomeConfig = {

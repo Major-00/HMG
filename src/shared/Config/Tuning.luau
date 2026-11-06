@@ -227,9 +227,23 @@ local Tuning = {
 	-- The landing hold: the camera stays on the landing before swooping back. The server times the
 	-- next pitch with the same numbers (Formulas.revealTime / ballCamTime). Visual only: it never
 	-- changes the result.
+	-- The catch roll on the final landing (server, CatchService). PLACEHOLDERS: the real numbers
+	-- are the Checklist decision "Base catch rate and pity count", set in soft launch.
+	Catch = {
+		CHANCE = 0.25, -- chance a landing catches something
+		PITY = 8, -- after this many hits in a row with no catch, the next one catches
+		FIRST_ON_HIT = 2, -- a player's first catch is guaranteed on this hit (Context: first or second)
+		-- Rarity weights, lowest first (Config/Rarities). Luck multiplies the weights of
+		-- LUCKY_FROM and up, so farther hits catch rarer creatures.
+		WEIGHTS = { 60, 25, 10, 4, 0.9, 0.1 },
+		LUCKY_FROM = 3, -- Rare and up
+		LUCK_PER_STUD = 1 / 600, -- Luck = 1 + distance x this (about x2 at the Coral Reef, x4.8 at the cliff)
+		FULL_FROM = 3, -- rarity rank that plays the full POV (Rare and up); lower ones get the short one
+	},
+
 	Reveal = {
-		SHORT = 1, -- seconds for every landing (nothing is caught yet)
-		FULL = 3, -- seconds for a landing that shows a catch, once catches exist
+		SHORT = 1, -- seconds for a landing with no catch, and the short POV of a low catch
+		FULL = 3, -- seconds for the full POV catch (Rare and up, and a player's first catch)
 		-- Tapping skips the hold and tells the server (Ready) so the next pitch comes sooner.
 		-- The server never throws it earlier than this long after the ball lands (plus the
 		-- camera's return), so skipping can't make the game faster than this.

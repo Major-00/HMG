@@ -20,6 +20,7 @@ export type PlayerData = {
 	lifetime: {
 		swings: number,
 		bestDistance: number,
+		catches: number, -- creatures caught, ever (the first catch is guaranteed)
 	},
 
 	firstJoin: number, -- os.time()

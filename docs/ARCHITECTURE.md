@@ -1,7 +1,8 @@
 # Lob an Orb!: Architecture
 
 Status: only the core loop is built. One tap launches, every tap hits, Power goes up by one, and
-the ball-cam follows the throw down the lane. Power and best distance are saved. Everything else
+the ball-cam follows the throw down the lane. Some landings catch a winged creature, seen through
+its own eyes (the POV catch). Power, best distance and the catch count are saved. Everything else
 is under **Planned** at the end. Guardrails and hard rules: [CLAUDE.md](../CLAUDE.md).
 
 - **Names in the code.** The code still uses the words of the swing that throws today: a batter,
@@ -61,7 +62,7 @@ SwingService (server)
   │    segment 1 = { from 0, to Formulas.distance(power), source "hit" }   (studs past the hit line)
   ▼
 LandingService.Resolve: on-land handlers (none yet) may push it further
-  │    → catch phase (none yet) → Landed signal
+  │    → catch phase (CatchService: a luck roll, farther = rarer) → Landed signal
   ├─ PitchService.QueueNext: next toss allowed after CONTACT_AT + Formulas.ballCamTime(...)
   ├─ save: power, lifetime.swings, lifetime.bestDistance, highestBiome
   └─ HitResult ─▶ client: BallController flies the ball; CameraController follows it
@@ -79,7 +80,7 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
   distance if `HitResult` is already here, else to a predicted one (`Formulas.distance(power + last
   gain)`), and re-plans mid-air when the result comes.
 - **Landing.** The ball stays on the ground for `Flight.LINGER_TIME`. The camera holds on it for
-  `Reveal.SHORT` (1s).
+  `Reveal.SHORT` (1s), or plays the POV catch when the landing caught something (below).
 - **Ball-cam.** Hold on the batter for `Fungo.CAMERA_BEAT` (0.25s, so the follow-through is seen),
   glide onto the ball over `CAMERA_GLIDE` (0.3s), follow, hold on the landing, then swoop back
   (0.35s) or fade-cut back past 250 studs. The camera comes back behind the batter where they
@@ -91,7 +92,18 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
 - **Every tap is a hit.** No misses, no mark to stand on. A tap from outside the hit zone launches
   from the zone's nearest point. The server never reads where the player stands.
 - **Pacing.** The first tap can launch the moment the save loads. Windy Highlands (206 studs) comes
-  on hit 15, about 52s in with the 1s hold, about 43s with every hold skipped.
+  on hit 15, about 54s in with the 1s hold and the first catch's full POV on hit 2, about 43s with
+  every hold skipped.
+
+- **The POV catch.** On the final landing the server rolls a catch (`Catch.CHANCE`, a pity count,
+  and a player's first catch guaranteed on hit `Catch.FIRST_ON_HIT`). The rarity comes from
+  `Formulas.rarityWeights`: Luck rises with distance and multiplies the weights of Rare and up.
+  The landing hold then becomes the creature's view, live in the real scene: it blinks awake near
+  the orb, looks around the biome, spots the orb with a head tilt, hops in and is pulled inside in
+  a flash; the vignette and the orb's glow take the rarity colour. Rare and up (and the first
+  catch) play the full 3s version (`Reveal.FULL`), Common and Uncommon a 1s one; a tap skips.
+  The creature's body is never shown, so no model is needed. The catch isn't kept yet (the orb
+  bag is next), only counted.
 
 ### Why the built mechanics exist (guardrail 7)
 
@@ -102,6 +114,10 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
 - **Free movement in the hit zone.** You can tap from anywhere, walking or standing. The game
   answers your movement from the first tap (**bounce**). Where you stand changes only where the
   ball's line starts, never its distance.
+- **The POV catch.** It's the game's own moment (the Implementations tab), and the suspense in
+  stages starts here: the colour hints before the Reveal Ring confirms (**bounce**, **D1**).
+  Common catches get the short version, so the loop stays every few seconds (**playtime**). A
+  luck roll on stats only; it adds no way to fail.
 - **Camera beat before the ball-cam.** The camera holds on the batter for 0.25s, then glides to the
   ball, so every launch's payoff is seen (**bounce**, **playtime**). It runs inside the flight, so
   pacing is unchanged. Visual only.
@@ -117,6 +133,7 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
 | Services/PitchService | **Pitcher slot.** Each player's active Pitcher and one hit per cycle. "toss" (Fungo): a `Swing(tossId)` counts once the last cycle is over (less `Pitch.TOSS_GRACE` for jitter); ids only go up; one a little early is held up to `Pitch.TOSS_MAX_HOLD`. "throw" (machine): schedules each `Pitch`. `Ready` brings the next ball forward, never inside the floor. Publishes the `Pitcher` and `PitcherMode` player attributes. |
 | Services/StatService | The Power multiplier per hit (`Formulas.multiplier`: today only the pitcher's bonus). |
 | Services/SwingService | Handles `Swing`: asks PitchService, adds Power, makes the first flight segment, runs LandingService, queues the next cycle, updates lifetime stats and `highestBiome`, fires `HitResult`. |
+| Services/CatchService | **The catch phase** (`LandingService.SetCatcher`): the catch roll and its rarity, the first-catch guarantee, the per-session pity count, and `lifetime.catches`. |
 | Services/LandingService | **On-land hook and catch phase.** Runs each handler (it may push the ball further, never back), then the catcher on the final landing, then fires `Landed`. A failing handler or catcher never stops the hit. |
 | Services/WorldService | Five batting lanes across the launch strip (a hidden `StrikePoint` each, `Lane` attributes), every spawn at the map's `Spawn` marker (or the middle of the launch strip with no map), the grey `TestPad` while there's no `Workspace.Map`, and the placeholder bat on every character (a `BatGrip` Motor6D the animations move, `TrailBase`/`TrailTip` for the swoosh). The pitching machine's pad, plate and model only when it's the default pitcher. Set the place's Max Players to 5 to match `World.LANE_COUNT`. |
 | Pitchers/Fungo | The default Pitcher, mode "toss": no cooldown; `travelTime` is tap to contact (`Fungo.CONTACT_AT`). |
@@ -134,6 +151,7 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
 | Controllers/FungoController | `Toss()`: one tap is the toss and swing. Sends `Swing(tossId)` at the tap, turns the batter to face +Z, plays the tier's swing through SwingAnimator (or BatSwing without animations), drops the toss ball onto the moving bat, plays contact effects and the hit-stop, and launches the ball at `CONTACT_AT`. The white swoosh trail is local only. Auto-Swing will call `Toss` too. Fires `Contact`. |
 | Controllers/BallController | Draws every ball, pooled and capped (`Flight.MAX_BALLS`). Flies the arcs from `HitResult`, re-plans a predicted flight mid-air, slow motion at the end. Fires `Launched` and `Touchdown`; `WatchDistance` calls back when a ball passes a distance. |
 | Controllers/CameraController | The ball-cam: beat, glide, follow, hold, return. Sends `Ready` when the hold is skipped or the result came too late. Fires `RevealStarted` / `RevealEnded`; `SetRevealCamera` lets a future catch view set the shot. |
+| Controllers/CatchController | The POV catch: sets the landing hold's shot (`CameraController.SetRevealCamera`) to the creature's view, with the eyelids, the rarity vignette, the flash and the orb's glow (`BallController.SetGlow`). Picks a random spot near the orb with a clear view each time. |
 | Controllers/PitcherController | "throw" pitchers only: draws each `Pitch` with that pitcher's visual and keeps the pitch in play. |
 | Modules/SwingAnimator | The batter's animations on the local character (they replicate): `FungoStance` (idle loop), `FungoCarry` (upper-body loop while walking) and one swing per Power tier, full-body and upper-body, two pairs per tier used in turn. Finish pose held until the camera is back. Published ids come from `Fungo.ANIMATIONS`; in Studio, unpublished ones load from `ReplicatedStorage.Animations`. |
 | Modules/SwingData | Generated by `tools/animations/generate.py`: each swing's names, length, marker times and contact point. |
@@ -152,6 +170,7 @@ LandingService.Resolve: on-land handlers (none yet) may push it further
 | BatPose | Where the placeholder bat sits in the hand. Shared by WorldService and BatSwing. |
 | HitZone | The hit zone on the launch strip: `halfWidth()`, `contains(pos)`, `clamp(pos)`, `lineOrigin(x)`. |
 | Config/Tuning | **Every tunable number** (section 7). |
+| Config/Rarities | The six rarity tiers (Common to Mythic), each with its one colour. |
 | Config/Biomes | The six biomes in flight order: Meadow, Windy Highlands, Tundra, Jungle Ruins, Coral Reef, Geyser Flats. |
 
 ## 4. Client ↔ server (remotes)
@@ -182,7 +201,7 @@ Save version 4.
   highestBiome = 1,       -- furthest biome reached (Config/Biomes index)
   pitcher = "fungo",      -- active Pitcher id (server/Pitchers)
   settings = { music = true, sfx = true, lowGraphics = false },
-  lifetime = { swings = 0, bestDistance = 0 },   -- never reset
+  lifetime = { swings = 0, bestDistance = 0, catches = 0 },   -- never reset
   firstJoin = 0, lastJoin = 0,
   lastOnline = 0,         -- os.time() at the last save or leave
 }
@@ -211,7 +230,7 @@ All types are in [HookTypes.luau](../src/shared/HookTypes.luau).
 - **Catch phase.** `LandingService.SetCatcher(fn)` sets one `Catcher`. It runs once, on the
   **final** landing after every handler, so a push changes which biome the catch comes from. Its
   result goes to the client as `HitResult.catch`. `Formulas.revealTime(catch)` is where a catch
-  will ask for the longer hold (`Reveal.FULL`). Nothing registers one yet.
+  asks for the longer hold (`Reveal.FULL`). CatchService registers it.
 - **Client hooks.** `FungoController.Contact` (bat on ball), `BallController.Launched`,
   `Touchdown` and `WatchDistance` (biome crossings), `CameraController.RevealStarted`,
   `RevealEnded` and `SetRevealCamera` (the landing hold's shot). These are the places for visual
@@ -234,7 +253,8 @@ them.
 | `Camera` | Ball-cam framing, slow motion, return and cut. The server times the cycle from these. |
 | `Swing` | The simple bat swing's timing. |
 | `Fungo` | Contact time, camera beat and glide, animation ids, and the five Power tiers' look and sound. |
-| `Reveal` | The landing hold: 1s now, 3s once a catch shows, 0.3s floor when skipped. |
+| `Catch` | **Placeholders** until the Checklist decision on the base catch rate and pity: chance 25%, pity 8, the first catch on hit 2, rarity weights 60/25/10/4/0.9/0.1, Luck +1 per 600 studs. |
+| `Reveal` | The landing hold: 1s with no catch or a low one, 3s for the full POV, 0.3s floor when skipped. |
 
 Where the biomes start, and the hit that first reaches each one from zero Power:
 
@@ -307,16 +327,17 @@ upper-body track just means the full-body swing plays while walking.
 | Server owns stats | Only Services write the save, through `DataService.Update`. The client sends a toss id (or pitch id), never a value. |
 | Mobile-first | One ball part with a short trail, pooled and capped at 6. The swoosh trail is local only and shorter on low graphics; contact effects are halved on low graphics. Lanes are a few hidden parts. |
 | Money | Nothing is sold yet. No product may touch Power, distance or catches. |
-| Odds first | No luck boosts yet. When one exists, its odds screen uses the same formula the server rolls with. |
+| Odds first | No luck boosts yet. The server rolls rarity with `Formulas.rarityWeights`; an odds screen must show those same numbers. |
 | Safe at home | No trading and nothing another player can reach. Only stats are owned so far. |
 | The map comes from Blender | WorldService builds no map geometry. It only adds the `TestPad` placeholder while `Workspace.Map` is missing. |
 | Original assets | The animations are generated in this repo. Sounds are built into the Roblox client. No MLB names or logos. |
-| Pacing | The first tap launches as soon as the save loads, from anywhere. Windy Highlands on hit 15, about 52s (section 7). Re-measure after any change to Distance, Flight, Camera, Fungo or Reveal. |
+| Pacing | The first tap launches as soon as the save loads, from anywhere. Windy Highlands on hit 15, about 54s (section 7). Re-measure after any change to Distance, Flight, Camera, Fungo or Reveal. |
 
 ## 10. Planned (not built)
 
-- **Catching winged creatures in orbs.** A lucky throw catches a winged creature where the orb lands, through the
-  catch phase (`LandingService.SetCatcher`). The orb flies back shaking.
+- **The caught orb returns.** After the POV the orb pops up and zips back to your hand, shaking
+  harder the rarer the creature, then goes in the orb bag (the bag icon, its cap). The species
+  roll waits for the winged rosters.
 - **The Reveal Ring.** The caught orb is cracked open there, in the hub. The longer landing hold
   (`Reveal.FULL`) is waiting for it.
 - **Launchers.** A stat that multiplies distance. It joins `Formulas.multiplier`.

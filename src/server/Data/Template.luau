@@ -22,6 +22,7 @@ local Template: Types.PlayerData = {
 	lifetime = {
 		swings = 0,
 		bestDistance = 0,
+		catches = 0,
 	},
 
 	firstJoin = 0,

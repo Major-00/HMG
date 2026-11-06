@@ -78,10 +78,30 @@ function Formulas.slowedAirTime(distance: number): number
 	return base + base * c.SLOWMO_PORTION * (1 / c.SLOWMO_SPEED - 1)
 end
 
--- Seconds the camera holds on the landing. Nothing is caught yet, so it's always the short hold;
--- `catch` is kept so a future catch can ask for the full one (Reveal.FULL).
-function Formulas.revealTime(_catch: any?): number
+-- Seconds the camera holds on the landing: the full POV for a catch marked `full` (Rare and up,
+-- or a player's first), else the short hold (which is also the short POV of a low catch).
+function Formulas.revealTime(catch: any?): number
+	if type(catch) == "table" and catch.full == true then
+		return Tuning.Reveal.FULL
+	end
 	return Tuning.Reveal.SHORT
+end
+
+-- Luck at a landing distance: farther hits catch rarer creatures.
+function Formulas.luck(distance: number): number
+	return 1 + math.max(distance, 0) * Tuning.Catch.LUCK_PER_STUD
+end
+
+-- The rarity weights at a landing distance (Tuning.Catch.WEIGHTS with Luck applied). The server
+-- rolls with these, and an odds screen must show these same numbers (CLAUDE.md, odds first).
+function Formulas.rarityWeights(distance: number): { number }
+	local c = Tuning.Catch
+	local luck = Formulas.luck(distance)
+	local weights = table.clone(c.WEIGHTS)
+	for i = c.LUCKY_FROM, #weights do
+		weights[i] *= luck
+	end
+	return weights
 end
 
 -- Seconds the camera takes to come back to the batter after the hold: a swoop, or a fade cut

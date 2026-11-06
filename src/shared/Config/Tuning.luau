@@ -49,7 +49,7 @@ local Tuning = {
 	-- Where each biome starts, in studs from the hit line, in Config/Biomes order: each one is that
 	-- biome's floor edge on the island map (Meadow, Windy Highlands, Tundra, Jungle Ruins,
 	-- Coral Reef, Geyser Flats). The map is built at 1.25x the Blender layout (MaP/EXPORT_SPEC.md);
-	-- the lane ends at the Geyser Flats' closing cliff behind the Crown Geyser, about 2,294 studs out.
+	-- the lane ends at the Geyser Flats' closing cliff behind the giant geyser, about 2,294 studs out.
 	BiomeStarts = { 0, 206, 456, 769, 1144, 1613 },
 
 	World = {

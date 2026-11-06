@@ -9,7 +9,7 @@ is under **Planned** at the end. Guardrails and hard rules: [CLAUDE.md](../CLAUD
 - **Server owns every number.** The client sends ids only, never values.
 - **Saves use ProfileStore.**
 - **One world.** The island's one straight lane leaves the hub through six biomes and ends at the
-  Geyser Flats' prism terraces and the Crown Geyser.
+  Geyser Flats' giant geyser and closing cliff.
 - **The map.** `Workspace.Map` is built in Studio from `MaP/HubBlock.blend` at 1.25x scale, by the
   steps in [MaP/EXPORT_SPEC.md](../MaP/EXPORT_SPEC.md). Rojo doesn't sync it, so it lives in the
   saved place.
@@ -246,7 +246,7 @@ Where the biomes start, and the hit that first reaches each one from zero Power:
 | Jungle Ruins | 769 | 60 |
 | Coral Reef | 1,144 | 90 |
 | Geyser Flats | 1,613 | 128 |
-| Prism terraces (the finale) | 2,181 | 173 |
+| Giant geyser (the finale) | 2,193 | 174 |
 | Closing cliff (lane end) | 2,294 | 182 |
 
 The numbers in `World`, `BiomeStarts` and `Distance` must match the map. If the map's scale

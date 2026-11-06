@@ -2,13 +2,12 @@
 
 *The Sky Is The Limit*
 
-A Roblox incremental game on a floating sky island. One tap launches an orb, and every tap hits.
-Distance comes only from stats (Power, launchers, boosts), never from timing or aim. The orb flies
-from the Sanctuary Crater down one straight lane through six biomes: Meadow, Windy Highlands,
-Tundra, Jungle Ruins, Coral Reef and Geyser Flats. A lucky throw catches a winged creature where
-the orb lands, and tamed creatures ride with you, boost your launches and paint your orbs with their
-trail. Today
-only the core loop is built: tap, launch, flight, ball-cam and saved Power.
+A Roblox incremental game in the sky. One tap launches an orb, and every tap hits. Distance comes
+only from stats (Power, launchers, boosts), never from timing or aim. The orb flies from the hub
+down one straight lane through six biomes: Meadow, Windy Highlands, Tundra, Jungle Ruins, Coral Reef
+and Geyser Flats. A lucky throw catches a winged creature where the orb lands, and tamed creatures
+ride with you, boost your launches and paint your orbs with their trail. Today only the core loop
+is built: tap, launch, flight, ball-cam and saved Power.
 
 ## Setup
 
@@ -52,7 +51,7 @@ selene src
 | `assets/` | `Animations/`: the batter's KeyframeSequences, generated. Synced to ReplicatedStorage for Studio previews. |
 | `tools/` | `animations/generate.py` bakes the swing animations and writes `SwingData.luau`. |
 | `docs/` | `ARCHITECTURE.md`: how the code fits together, what's planned. |
-| `MaP/` | The island map in Blender (`HubBlock.blend`), the source of truth for the map. Not synced by Rojo. |
+| `MaP/` | The island map in Blender (`HubBlock.blend`), the source of truth for the map, and the scripts that build and export it (`MaP/tools/`). Not synced by Rojo. |
 
 ## Read first
 
